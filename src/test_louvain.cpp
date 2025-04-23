@@ -1,5 +1,6 @@
 #include "louvain_seq.h"
 #include "louvain_parallel.h"
+#include "louvain_parallel_vfc.h"
 
 #include <iostream>
 #include <string>
@@ -9,10 +10,11 @@
 #include <cstring>
 
 void printUsage(const char* programName) {
-    std::cerr << "Usage: " << programName << " <input_file> [-S|-P [-n num_threads]]\n";
+    std::cerr << "Usage: " << programName << " <input_file> [-S|-P|-V [-n num_threads]]\n";
     std::cerr << "Options:\n";
     std::cerr << "  -S               Run sequential Louvain algorithm (default)\n";
-    std::cerr << "  -P               Run parallel Louvain algorithm with graph partitioning\n";
+    std::cerr << "  -P               Run naive parallel Louvain algorithm\n";
+    std::cerr << "  -V               Run parallel Louvain algorithm with Vertex Following and Coloring\n";
     std::cerr << "  -n num_threads   Number of threads/partitions to use (default: 1)\n";
 }
 
@@ -23,16 +25,20 @@ int main(int argc, char* argv[]) {
     }
     
     std::string input_filename = argv[1];
-    bool useParallel = false;
+    enum AlgorithmType { SEQUENTIAL, NAIVE_PARALLEL, PARALLEL_VFC };
+    AlgorithmType algorithm = SEQUENTIAL;
     int numThreads = 1;
     
     // Parse command line arguments
     for (int i = 2; i < argc; i++) {
         if (strcmp(argv[i], "-S") == 0) {
-            useParallel = false;
+            algorithm = SEQUENTIAL;
         }
         else if (strcmp(argv[i], "-P") == 0) {
-            useParallel = true;
+            algorithm = NAIVE_PARALLEL;
+        }
+        else if (strcmp(argv[i], "-V") == 0) {
+            algorithm = PARALLEL_VFC;
         }
         else if (strcmp(argv[i], "-n") == 0 && i + 1 < argc) {
             numThreads = std::atoi(argv[++i]);
@@ -55,12 +61,20 @@ int main(int argc, char* argv[]) {
     auto start_time = std::chrono::high_resolution_clock::now();
     
     Hierarchy H;
-    if (useParallel) {
-        std::cout << "Running parallel Louvain algorithm with " << numThreads << " threads\n";
-        louvainParallel(g, H, numThreads);
-    } else {
-        std::cout << "Running sequential Louvain algorithm\n";
-        louvainHierarchical(g, H);
+    switch (algorithm) {
+        case SEQUENTIAL:
+            std::cout << "Running sequential Louvain algorithm\n";
+            louvainHierarchical(g, H);
+            break;
+        case NAIVE_PARALLEL:
+            std::cout << "Running naive parallel Louvain algorithm with " << numThreads << " threads\n";
+            louvainParallel(g, H, numThreads);
+            break;
+        case PARALLEL_VFC:
+            std::cout << "Running parallel Louvain algorithm with Vertex Following and Coloring using " 
+                      << numThreads << " threads\n";
+            louvainParallelVFC(g, H, numThreads);
+            break;
     }
     
     auto end_time = std::chrono::high_resolution_clock::now();

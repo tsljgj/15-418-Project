@@ -19,5 +19,6 @@ add_executable(test_louvain
     test_louvain.cpp
     louvain_seq.cpp
     louvain_parallel.cpp
+    louvain_parallel_vfc.cpp
 )
 target_link_libraries(test_louvain PRIVATE OpenMP::OpenMP_CXX)

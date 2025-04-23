@@ -2,14 +2,14 @@
 """
 Louvain Algorithm Benchmark Script
 
-This script runs both sequential and parallel versions of the Louvain community
+This script runs different versions of the Louvain community
 detection algorithm with varying thread counts and measures performance metrics.
 
 Usage:
-    python louvain_benchmark.py <input_file> [--threads THREADS] [--runs RUNS]
+    python src/checker.py <input_file> [--algorithm ALGORITHM] [--threads THREADS] [--runs RUNS]
 
 Example:
-    python louvain_benchmark.py graph.txt --threads 1,2,4,8 --runs 3
+    python src/checker.py inputs/community_graph_5e5.txt --algorithm sequential,naive,vfc --threads 1,2,4,8 --runs 1
 """
 
 import subprocess
@@ -28,14 +28,20 @@ def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description='Benchmark Louvain algorithm implementations.')
     parser.add_argument('input_file', help='Input graph file path')
+    parser.add_argument('--algorithm', 
+                      help='Comma-separated list of algorithms to test (sequential,naive,vfc) (default: sequential,naive,vfc)')
     parser.add_argument('--threads', 
                       help='Comma-separated list of thread counts to test (default: 1,2,4,8)')
-    parser.add_argument('--runs', type=int, default=3, 
-                      help='Number of runs for each configuration (default: 3)')
+    parser.add_argument('--runs', type=int, default=1, 
+                      help='Number of runs for each configuration (default: 1)')
     parser.add_argument('--executable', default='./build/test_louvain',
                       help='Path to the test_louvain executable (default: ./build/test_louvain)')
     
     args = parser.parse_args()
+    
+    # Set default algorithms if not specified
+    if args.algorithm is None:
+        args.algorithm = 'sequential,naive,vfc'
     
     # Set default thread counts if not specified
     if args.threads is None:
@@ -43,14 +49,16 @@ def parse_arguments():
     
     return args
 
-def run_louvain(executable, input_file, parallel=False, num_threads=1):
+def run_louvain(executable, input_file, algorithm="sequential", num_threads=1):
     """Run the Louvain algorithm and capture output."""
     # Build command
     cmd = [executable, input_file]
-    if parallel:
-        cmd.extend(['-P', '-n', str(num_threads)])
-    else:
+    if algorithm == "sequential":
         cmd.append('-S')
+    elif algorithm == "naive":
+        cmd.extend(['-P', '-n', str(num_threads)])
+    elif algorithm == "vfc":
+        cmd.extend(['-V', '-n', str(num_threads)])
     
     # Run process and capture output
     try:
@@ -148,95 +156,150 @@ def run_benchmarks(args):
         print(f"{Fore.RED}Error: Invalid thread counts. Please provide comma-separated integers.{Style.RESET_ALL}")
         return
     
+    # Parse algorithms
+    algorithms = [algo.strip().lower() for algo in args.algorithm.split(',')]
+    valid_algorithms = ["sequential", "naive", "vfc"]
+    for algo in algorithms:
+        if algo not in valid_algorithms:
+            print(f"{Fore.RED}Error: Invalid algorithm '{algo}'. Valid options are: {', '.join(valid_algorithms)}{Style.RESET_ALL}")
+            return
+    
     # Print benchmark configuration
     print_section("CONFIGURATION")
     print(f"Input file:  {Fore.GREEN}{args.input_file}{Style.RESET_ALL}")
+    print(f"Algorithms: {Fore.GREEN}{', '.join(algorithms)}{Style.RESET_ALL}")
     print(f"Thread counts: {Fore.GREEN}{', '.join(map(str, thread_counts))}{Style.RESET_ALL}")
     print(f"Runs per configuration: {Fore.GREEN}{args.runs}{Style.RESET_ALL}")
     print(f"Executable: {Fore.GREEN}{args.executable}{Style.RESET_ALL}")
 
-    # Run sequential benchmark first
-    print_section("RUNNING SEQUENTIAL ALGORITHM")
-    seq_runtimes = []
-    seq_modularities = []
+    # Dictionary to store all results for final comparison
+    all_results = {}
     
-    for i in range(args.runs):
-        print(f"Run {i+1}/{args.runs}...", end="", flush=True)
-        stdout, returncode, stderr = run_louvain(args.executable, args.input_file, parallel=False)
+    # Run benchmarks for each algorithm
+    for algorithm in algorithms:
+        print_section(f"RUNNING {algorithm.upper()} ALGORITHM")
         
-        if returncode == 0:
-            runtime, modularity = extract_metrics(stdout)
-            seq_runtimes.append(runtime)
-            seq_modularities.append(modularity)
-            print(f" {Fore.GREEN}Done{Style.RESET_ALL} (Runtime: {runtime:.3f}s, Modularity: {modularity:.6f})")
+        # For sequential, we only need to run it once
+        if algorithm == "sequential":
+            thread_counts_to_use = [1]
         else:
-            print(f" {Fore.RED}Failed{Style.RESET_ALL}")
-    
-    # Calculate sequential statistics
-    if seq_runtimes:
-        avg_seq_runtime = statistics.mean(seq_runtimes)
-        avg_seq_modularity = statistics.mean(seq_modularities)
-    else:
-        print(f"{Fore.RED}Error: All sequential runs failed.{Style.RESET_ALL}")
-        return
-    
-    # Run parallel benchmarks with different thread counts
-    print_section("RUNNING PARALLEL ALGORITHM")
-    results = []
-    
-    for threads in thread_counts:
-        print(f"\nBenchmarking with {Fore.GREEN}{threads}{Style.RESET_ALL} threads:")
-        par_runtimes = []
-        par_modularities = []
+            thread_counts_to_use = thread_counts
         
-        for i in range(args.runs):
-            print(f"  Run {i+1}/{args.runs}...", end="", flush=True)
-            stdout, returncode, stderr = run_louvain(args.executable, args.input_file, parallel=True, num_threads=threads)
+        algorithm_results = []
+        
+        for threads in thread_counts_to_use:
+            print(f"\nBenchmarking with {Fore.GREEN}{threads}{Style.RESET_ALL} thread(s):")
+            runs_runtimes = []
+            runs_modularities = []
             
-            if returncode == 0:
-                runtime, modularity = extract_metrics(stdout)
-                par_runtimes.append(runtime)
-                par_modularities.append(modularity)
-                print(f" {Fore.GREEN}Done{Style.RESET_ALL} (Runtime: {runtime:.3f}s, Modularity: {modularity:.6f})")
+            for i in range(args.runs):
+                print(f"  Run {i+1}/{args.runs}...", end="", flush=True)
+                stdout, returncode, stderr = run_louvain(args.executable, args.input_file, algorithm, threads)
+                
+                if returncode == 0:
+                    runtime, modularity = extract_metrics(stdout)
+                    runs_runtimes.append(runtime)
+                    runs_modularities.append(modularity)
+                    print(f" {Fore.GREEN}Done{Style.RESET_ALL} (Runtime: {runtime:.3f}s, Modularity: {modularity:.6f})")
+                else:
+                    print(f" {Fore.RED}Failed{Style.RESET_ALL}")
+            
+            # Calculate statistics for this thread count
+            if runs_runtimes:
+                avg_runtime = statistics.mean(runs_runtimes)
+                avg_modularity = statistics.mean(runs_modularities)
+                
+                algorithm_results.append([
+                    threads,
+                    f"{avg_runtime:.3f}",
+                    f"{avg_modularity:.6f}"
+                ])
+                
+                # Store for final comparison
+                key = f"{algorithm}_{threads}"
+                all_results[key] = {
+                    "algorithm": algorithm,
+                    "threads": threads,
+                    "runtime": avg_runtime,
+                    "modularity": avg_modularity
+                }
             else:
-                print(f" {Fore.RED}Failed{Style.RESET_ALL}")
+                algorithm_results.append([threads, "N/A", "N/A"])
         
-        # Calculate statistics for this thread count
-        if par_runtimes:
-            avg_par_runtime = statistics.mean(par_runtimes)
-            avg_par_modularity = statistics.mean(par_modularities)
-            speedup = avg_seq_runtime / avg_par_runtime
+        # Print results table for this algorithm
+        headers = ["Threads", "Runtime (s)", "Modularity"]
+        print_table(headers, algorithm_results)
+    
+    # Final comparison across all algorithms
+    if all_results:
+        print_header("COMPARISON ACROSS ALL ALGORITHMS")
+        
+        # Find sequential runtime and modularity for baseline
+        seq_runtime = None
+        seq_modularity = None
+        for key, result in all_results.items():
+            if result["algorithm"] == "sequential":
+                seq_runtime = result["runtime"]
+                seq_modularity = result["modularity"]
+                break
+        
+        # Print sequential baseline info
+        if seq_runtime is not None:
+            print(f"Sequential baseline: Runtime = {Fore.GREEN}{seq_runtime:.3f}s{Style.RESET_ALL}, "
+                  f"Modularity = {Fore.GREEN}{seq_modularity:.6f}{Style.RESET_ALL}")
+            print()
+        
+        # Find the best modularity and runtime across all parallel algorithms
+        parallel_results = {k: v for k, v in all_results.items() if v["algorithm"] != "sequential"}
+        
+        if not parallel_results:
+            print("No parallel algorithm results to compare.")
+            return
             
-            results.append([
+        best_modularity = max(result["modularity"] for result in parallel_results.values())
+        best_runtime = min(result["runtime"] for result in parallel_results.values())
+        
+        # Prepare comparison table (excluding sequential)
+        comparison_data = []
+        for key, result in sorted(parallel_results.items()):
+            algorithm = result["algorithm"]
+            threads = result["threads"]
+            runtime = result["runtime"]
+            modularity = result["modularity"]
+            
+            # Calculate speedup relative to sequential
+            if seq_runtime is not None:
+                speedup = f"{seq_runtime / runtime:.2f}x"
+            else:
+                speedup = "N/A"
+            
+            # Calculate modularity relative to best
+            modularity_rel = f"{modularity / best_modularity:.4f}"
+            
+            comparison_data.append([
+                algorithm,
                 threads,
-                f"{avg_par_runtime:.3f}",
-                f"{speedup:.2f}x",
-                f"{avg_par_modularity:.6f}",
-                f"{(avg_par_modularity - avg_seq_modularity):.6f}"
+                f"{runtime:.3f}",
+                speedup,
+                f"{modularity:.6f}",
+                modularity_rel
             ])
-        else:
-            results.append([threads, "N/A", "N/A", "N/A", "N/A"])
-    
-    # Print summary table
-    print_header("BENCHMARK RESULTS SUMMARY")
-    
-    # Print sequential baseline
-    print(f"Sequential baseline: {Fore.GREEN}{avg_seq_runtime:.3f}s{Style.RESET_ALL}, "
-          f"Modularity: {Fore.GREEN}{avg_seq_modularity:.6f}{Style.RESET_ALL}")
-    
-    # Print parallel results table using our custom table printing function
-    headers = ["Threads", "Runtime (s)", "Speedup", "Modularity", "Modularity Diff"]
-    print_table(headers, results)
-    
-    # Print best configuration
-    valid_results = [r for r in results if r[1] != "N/A"]
-    if valid_results:
-        best_speedup_idx = max(range(len(valid_results)), 
-                              key=lambda i: float(valid_results[i][2].rstrip('x')))
-        best_threads = valid_results[best_speedup_idx][0]
-        best_speedup = valid_results[best_speedup_idx][2]
-        print(f"\nBest configuration: {Fore.GREEN}{best_threads} threads{Style.RESET_ALL} "
-              f"with speedup of {Fore.GREEN}{best_speedup}{Style.RESET_ALL}")
+        
+        # Print comparison table
+        headers = ["Algorithm", "Threads", "Runtime (s)", "Speedup", "Modularity", "Modularity (rel)"]
+        print_table(headers, comparison_data)
+        
+        # Find the best configurations
+        best_modularity_config = max(all_results.items(), key=lambda x: x[1]["modularity"])
+        best_runtime_config = min(all_results.items(), key=lambda x: x[1]["runtime"])
+        
+        print(f"\nBest modularity: {Fore.GREEN}{best_modularity_config[1]['modularity']:.6f}{Style.RESET_ALL} "
+              f"with {Fore.GREEN}{best_modularity_config[1]['algorithm']}{Style.RESET_ALL} "
+              f"using {Fore.GREEN}{best_modularity_config[1]['threads']}{Style.RESET_ALL} threads")
+        
+        print(f"Best runtime: {Fore.GREEN}{best_runtime_config[1]['runtime']:.3f}s{Style.RESET_ALL} "
+              f"with {Fore.GREEN}{best_runtime_config[1]['algorithm']}{Style.RESET_ALL} "
+              f"using {Fore.GREEN}{best_runtime_config[1]['threads']}{Style.RESET_ALL} threads")
     
     print("\nBenchmark completed successfully.")
 
