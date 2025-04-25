@@ -152,6 +152,8 @@ def run_benchmarks(args):
     # Parse thread counts
     try:
         thread_counts = [int(t) for t in args.threads.split(',')]
+        # Sort thread counts to ensure they appear in ascending order
+        thread_counts.sort()
     except ValueError:
         print(f"{Fore.RED}Error: Invalid thread counts. Please provide comma-separated integers.{Style.RESET_ALL}")
         return
@@ -226,6 +228,9 @@ def run_benchmarks(args):
             else:
                 algorithm_results.append([threads, "N/A", "N/A"])
         
+        # Sort algorithm_results by thread count before printing
+        algorithm_results.sort(key=lambda x: x[0])
+        
         # Print results table for this algorithm
         headers = ["Threads", "Runtime (s)", "Modularity"]
         print_table(headers, algorithm_results)
@@ -261,7 +266,7 @@ def run_benchmarks(args):
         
         # Prepare comparison table (excluding sequential)
         comparison_data = []
-        for key, result in sorted(parallel_results.items()):
+        for key, result in parallel_results.items():
             algorithm = result["algorithm"]
             threads = result["threads"]
             runtime = result["runtime"]
@@ -284,6 +289,9 @@ def run_benchmarks(args):
                 f"{modularity:.6f}",
                 modularity_rel
             ])
+        
+        # Sort comparison_data by algorithm name and then by thread count
+        comparison_data.sort(key=lambda x: (x[0], x[1]))
         
         # Print comparison table
         headers = ["Algorithm", "Threads", "Runtime (s)", "Speedup", "Modularity", "Modularity (rel)"]
