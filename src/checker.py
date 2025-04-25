@@ -34,16 +34,17 @@ def parse_arguments():
                       help='Comma-separated list of thread counts to test (default: 1,2,4,8)')
     parser.add_argument('--runs', type=int, default=1, 
                       help='Number of runs for each configuration (default: 1)')
-    parser.add_argument('--executable', default='./build/test_louvain',
-                      help='Path to the test_louvain executable (default: ./build/test_louvain)')
+
+    # Automatically detect if .exe exists
+    exe_path = './build/test_louvain.exe' if os.path.isfile('./build/test_louvain.exe') else './build/test_louvain'
+    parser.add_argument('--executable', default=exe_path,
+                      help='Path to the test_louvain executable (auto-chooses .exe if found)')
     
     args = parser.parse_args()
-    
-    # Set default algorithms if not specified
+
+    # Set defaults if not provided
     if args.algorithm is None:
         args.algorithm = 'sequential,naive,vfc'
-    
-    # Set default thread counts if not specified
     if args.threads is None:
         args.threads = '1,2,4,8'
     
