@@ -4,6 +4,13 @@
 #include <vector>
 #include <string>
 
+// Enum for specifying CPU core type
+enum CoreType {
+    ANY_CORE,  // No specific core preference
+    P_CORE,    // Performance core
+    E_CORE     // Efficiency core
+};
+
 // Structure for a (weighted) edge.
 struct Edge {
     int neighbor;    // Index of neighbor node.
@@ -26,6 +33,9 @@ struct Hierarchy {
     std::vector<std::vector<int>> partitions;
 };
 
+// Helper function to set thread affinity to specific core type
+void setCoreAffinity(CoreType coreType);
+
 // Reads a graph from a file. File format:
 //   First line: <number_of_nodes> <number_of_edges>
 //   Each subsequent line: <node> <neighbor> [weight]
@@ -39,6 +49,7 @@ double computeModularity(const Graph &g, const std::vector<int> &community);
 // Runs the sequential Louvain algorithm (local move phase plus aggregation)
 // and builds a full hierarchical decomposition stored in "hierarchy".
 // The full hierarchy is stored as a sequence of partitions.
-void louvainHierarchical(const Graph &g, Hierarchy &hierarchy);
+// Added coreType parameter to specify which type of core to run on.
+void louvainHierarchical(const Graph &g, Hierarchy &hierarchy, CoreType coreType = P_CORE);
 
 #endif // LOUVAIN_SEQ_H

@@ -7,7 +7,8 @@ mkdir -p build
 cd build
 
 # Configure CMake (point to src directory)
-cmake ../src
+# No need to specify -lpthread as it will be handled properly per platform
+cmake ../src 
 
 # Build the project
 cmake --build .

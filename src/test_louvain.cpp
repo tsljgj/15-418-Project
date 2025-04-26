@@ -8,14 +8,18 @@
 #include <chrono>
 #include <unordered_set>
 #include <cstring>
+// In test_louvain.cpp update the printUsage function:
 
 void printUsage(const char* programName) {
-    std::cerr << "Usage: " << programName << " <input_file> [-S|-P|-V [-n num_threads]]\n";
+    std::cerr << "Usage: " << programName << " <input_file> [-S|-P|-V [-n num_threads]] [-p|-e|-a]\n";
     std::cerr << "Options:\n";
     std::cerr << "  -S               Run sequential Louvain algorithm (default)\n";
     std::cerr << "  -P               Run naive parallel Louvain algorithm\n";
     std::cerr << "  -V               Run parallel Louvain algorithm with Vertex Following and Coloring\n";
     std::cerr << "  -n num_threads   Number of threads/partitions to use (default: 1)\n";
+    std::cerr << "  -p               Run on P-cores (performance cores)\n";
+    std::cerr << "  -e               Run on E-cores (efficiency cores)\n";
+    std::cerr << "  -a               Use any available cores (system decides, default)\n";
 }
 
 int main(int argc, char* argv[]) {
@@ -30,6 +34,8 @@ int main(int argc, char* argv[]) {
     int numThreads = 1;
     
     // Parse command line arguments
+    CoreType coreType = ANY_CORE; // Default to any core (system decides)
+
     for (int i = 2; i < argc; i++) {
         if (strcmp(argv[i], "-S") == 0) {
             algorithm = SEQUENTIAL;
@@ -47,6 +53,15 @@ int main(int argc, char* argv[]) {
                 return EXIT_FAILURE;
             }
         }
+        else if (strcmp(argv[i], "-p") == 0) {
+            coreType = P_CORE;
+        }
+        else if (strcmp(argv[i], "-e") == 0) {
+            coreType = E_CORE;
+        }
+        else if (strcmp(argv[i], "-a") == 0) {
+            coreType = ANY_CORE;
+        }
         else {
             printUsage(argv[0]);
             return EXIT_FAILURE;
@@ -63,11 +78,21 @@ int main(int argc, char* argv[]) {
     Hierarchy H;
     switch (algorithm) {
         case SEQUENTIAL:
-            std::cout << "Running sequential Louvain algorithm\n";
-            louvainHierarchical(g, H);
+            std::cout << "Running sequential Louvain algorithm";
+            if (coreType == P_CORE) {
+                std::cout << " on P-cores\n";
+            } else if (coreType == E_CORE) {
+                std::cout << " on E-cores\n";
+            } else {
+                std::cout << " (core type not specified)\n";
+            }
+            louvainHierarchical(g, H, coreType);
             break;
         case NAIVE_PARALLEL:
             std::cout << "Running naive parallel Louvain algorithm with " << numThreads << " threads\n";
+            // Note: For parallel algorithms, we don't set specific core affinity as threads
+            // will be distributed by the system. However, you could extend this functionality
+            // by modifying the parallel implementations as well.
             louvainParallel(g, H, numThreads);
             break;
         case PARALLEL_VFC:

@@ -8,6 +8,91 @@
 #include <cmath>
 #include <cstdlib>
 #include <limits>
+#include <thread>
+#include <windows.h>
+
+// Thread affinity settings for Windows
+void setCoreAffinity(CoreType coreType) {
+    // Get number of available CPUs
+    int numCPUs = std::thread::hardware_concurrency();
+    
+    // Print the current thread ID
+    DWORD threadId = GetCurrentThreadId();
+    std::cout << "Current Thread ID: " << threadId << std::endl;
+    
+    // Create affinity mask
+    DWORD_PTR affinityMask = 0;
+    
+    if (coreType == ANY_CORE) {
+        // Use all available cores - let the system decide
+        for (int i = 0; i < numCPUs; i++) {
+            affinityMask |= (static_cast<DWORD_PTR>(1) << i);
+        }
+        std::cout << "No specific core affinity set - using any available core (system decides)\n";
+        std::cout << "Available cores: ";
+        for (int i = 0; i < numCPUs; i++) {
+            std::cout << i << " ";
+        }
+        std::cout << std::endl;
+        
+        // For the "any core" option, we can either:
+        // 1. Set the affinity mask to include all cores (which we're doing)
+        // 2. Not set an affinity mask at all (which would have the same effect)
+        
+        // Option 2 would be:
+        // return;  // Don't set any affinity, let system decide
+        
+    } else if (numCPUs >= 8) {  // Assuming i9-14900K with P-cores and E-cores
+        if (coreType == P_CORE) {
+            // P-cores are typically the first half on hybrid architectures
+            for (int i = 0; i < numCPUs / 2; i++) {
+                affinityMask |= (static_cast<DWORD_PTR>(1) << i);
+            }
+            std::cout << "Setting affinity to P-cores for Thread ID: " << threadId << std::endl;
+            
+            // Print which cores we're targeting
+            std::cout << "Target cores: ";
+            for (int i = 0; i < numCPUs / 2; i++) {
+                std::cout << i << " ";
+            }
+            std::cout << std::endl;
+        } else if (coreType == E_CORE) {
+            // E-cores are typically the second half
+            for (int i = numCPUs / 2; i < numCPUs; i++) {
+                affinityMask |= (static_cast<DWORD_PTR>(1) << i);
+            }
+            std::cout << "Setting affinity to E-cores for Thread ID: " << threadId << std::endl;
+            
+            // Print which cores we're targeting
+            std::cout << "Target cores: ";
+            for (int i = numCPUs / 2; i < numCPUs; i++) {
+                std::cout << i << " ";
+            }
+            std::cout << std::endl;
+        }
+    } else {
+        // If fewer cores or cannot determine, use all available
+        for (int i = 0; i < numCPUs; i++) {
+            affinityMask |= (static_cast<DWORD_PTR>(1) << i);
+        }
+        std::cout << "Warning: Cannot determine P/E cores. Using all available cores for Thread ID: " << threadId << std::endl;
+    }
+    
+    // Set the CPU affinity for the current thread
+    HANDLE currentThread = GetCurrentThread();
+    BOOL result = SetThreadAffinityMask(currentThread, affinityMask);
+    if (result == 0) {
+        std::cerr << "Error setting thread affinity: " << GetLastError() << " for Thread ID: " << threadId << std::endl;
+    } else {
+        std::cout << "Affinity set successfully for Thread ID: " << threadId << std::endl;
+        
+        // Get and print the actual affinity mask that was set
+        DWORD_PTR processAffinityMask, systemAffinityMask;
+        if (GetProcessAffinityMask(GetCurrentProcess(), &processAffinityMask, &systemAffinityMask)) {
+            std::cout << "Process affinity mask: 0x" << std::hex << processAffinityMask << std::dec << std::endl;
+        }
+    }
+}
 
 // -------------------------------------------------------------------------
 // Graph Reading function (supports weighted and unweighted graphs).
@@ -137,7 +222,7 @@ static bool localMovePass(const Graph &g, std::vector<int> &community, std::vect
 
 // -------------------------------------------------------------------------
 // Local move phase: repeatedly perform local node moves until convergence.
-// Returns the partition for the current graph (each node’s community).
+// Returns the partition for the current graph (each node's community).
 static std::vector<int> localMovePhase(const Graph &g) {
     int n = g.n;
     std::vector<int> partition(n);
@@ -234,7 +319,10 @@ static void runLouvainHierarchy(const Graph &g, Hierarchy &H) {
 // -------------------------------------------------------------------------
 // Top-level interface for the hierarchical sequential Louvain algorithm.
 // This function computes the full hierarchical decomposition and stores it in hierarchy.
-void louvainHierarchical(const Graph &g, Hierarchy &hierarchy) {
+void louvainHierarchical(const Graph &g, Hierarchy &hierarchy, CoreType coreType) {
+    // Set core affinity before starting the algorithm
+    setCoreAffinity(coreType);
+    
     hierarchy.partitions.clear();
     runLouvainHierarchy(g, hierarchy);
 }
