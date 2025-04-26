@@ -25,4 +25,6 @@ add_executable(test_louvain
     louvain_seq.cpp
     louvain_parallel.cpp
     louvain_parallel_vfc.cpp
+    graph.cpp        # Added
+    core_type.cpp    # Added
 )

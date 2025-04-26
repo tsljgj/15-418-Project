@@ -2,6 +2,8 @@
 #ifndef CORE_TYPE_H
 #define CORE_TYPE_H
 
+#include <vector>
+
 // Enum for specifying CPU core type
 enum CoreType {
     ANY_CORE,  // No specific core preference
