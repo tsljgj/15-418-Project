@@ -3,6 +3,8 @@
 #include <sstream>
 #include <iostream>
 #include <numeric>
+#include <vector>
+#include <unordered_map>
 
 Graph readGraph(const std::string &filename) {
     std::ifstream in(filename);

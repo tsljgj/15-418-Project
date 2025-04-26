@@ -1,4 +1,8 @@
+// louvain_seq.cpp (updated)
 #include "louvain_seq.h"
+#include "graph.h"
+#include "hierarchy.h"
+#include "core_type.h"
 
 #include <fstream>
 #include <sstream>
@@ -11,189 +15,6 @@
 #include <thread>
 #include <windows.h>
 
-// Set thread affinity to a specific CPU ID
-void setThreadAffinityToCpu(int cpuId) {
-    HANDLE currentThread = GetCurrentThread();
-    DWORD_PTR affinityMask = (static_cast<DWORD_PTR>(1) << cpuId);
-    DWORD threadId = GetCurrentThreadId();
-    
-    std::cout << "Setting thread " << threadId << " to CPU " << cpuId << std::endl;
-    
-    BOOL result = SetThreadAffinityMask(currentThread, affinityMask);
-    if (result == 0) {
-        std::cerr << "Error setting thread affinity to CPU " << cpuId 
-                  << ": " << GetLastError() << " for Thread ID: " << threadId << std::endl;
-    } else {
-        std::cout << "Thread " << threadId << " successfully assigned to CPU " << cpuId << std::endl;
-    }
-}
-
-// Get the appropriate CPU ID range for a core type
-std::vector<int> getCpuIdsForCoreType(CoreType coreType) {
-    std::vector<int> cpuIds;
-    int numCPUs = std::thread::hardware_concurrency();
-    
-    switch (coreType) {
-        case P_CORE:
-            // P-cores are 0-15 on your system (8 P cores, two threads per P core)
-            for (int i = 0; i < 16 && i < numCPUs; i++) {
-                cpuIds.push_back(i);
-            }
-            break;
-            
-        case E_CORE:
-            // E-cores are 16-31 on your system
-            for (int i = 16; i < 32 && i < numCPUs; i++) {
-                cpuIds.push_back(i);
-            }
-            break;
-            
-        case ANY_CORE:
-        default:
-            // All available cores
-            for (int i = 0; i < numCPUs; i++) {
-                cpuIds.push_back(i);
-            }
-            break;
-    }
-    
-    return cpuIds;
-}
-
-// Set thread affinity based on core type
-void setThreadAffinityCoreType(CoreType coreType) {
-    // If ANY_CORE, don't set any specific affinity
-    if (coreType == ANY_CORE) {
-        std::cout << "No specific core affinity set - using any available core (system decides)\n";
-        return;
-    }
-    
-    std::vector<int> cpuIds = getCpuIdsForCoreType(coreType);
-    if (cpuIds.empty()) {
-        std::cerr << "No CPUs found for the specified core type\n";
-        return;
-    }
-    
-    HANDLE currentThread = GetCurrentThread();
-    DWORD_PTR affinityMask = 0;
-    
-    // Create affinity mask for all CPUs of the requested type
-    for (int cpuId : cpuIds) {
-        affinityMask |= (static_cast<DWORD_PTR>(1) << cpuId);
-    }
-    
-    DWORD threadId = GetCurrentThreadId();
-    std::cout << "Setting thread " << threadId << " to ";
-    if (coreType == P_CORE) {
-        std::cout << "P-cores (CPUs 0-15)\n";
-    } else if (coreType == E_CORE) {
-        std::cout << "E-cores (CPUs 16-31)\n";
-    }
-    
-    BOOL result = SetThreadAffinityMask(currentThread, affinityMask);
-    if (result == 0) {
-        std::cerr << "Error setting thread affinity: " << GetLastError() 
-                 << " for Thread ID: " << threadId << std::endl;
-    } else {
-        std::cout << "Affinity set successfully for Thread ID: " << threadId << std::endl;
-        
-        // Get and print the actual affinity mask that was set
-        DWORD_PTR processAffinityMask, systemAffinityMask;
-        if (GetProcessAffinityMask(GetCurrentProcess(), &processAffinityMask, &systemAffinityMask)) {
-            std::cout << "Process affinity mask: 0x" << std::hex << processAffinityMask << std::dec << std::endl;
-        }
-    }
-}
-
-// Legacy function to maintain compatibility with existing code
-void setCoreAffinity(CoreType coreType) {
-    // Simply call the new function
-    setThreadAffinityCoreType(coreType);
-}
-
-// -------------------------------------------------------------------------
-// Graph Reading function (supports weighted and unweighted graphs).
-Graph readGraph(const std::string &filename) {
-    Graph g;
-    std::ifstream in(filename);
-    if (!in.is_open()) {
-        std::cerr << "Error opening input file: " << filename << "\n";
-        exit(EXIT_FAILURE);
-    }
-    std::string line;
-    // First line: number of nodes and (approximate) number of edges.
-    if (std::getline(in, line)) {
-        std::istringstream iss(line);
-        iss >> g.n;
-        // The edge count from the header is not strictly used.
-    } else {
-        std::cerr << "Error reading first line of file.\n";
-        exit(EXIT_FAILURE);
-    }
-    // Initialize adjacency list and degree vector.
-    g.adj.resize(g.n);
-    g.degree.assign(g.n, 0.0);
-
-    int u, v;
-    double w;
-    int edgeCount = 0;
-    while (std::getline(in, line)) {
-        if (line.empty())
-            continue;
-        std::istringstream iss(line);
-        // Read u, v; if weight is not provided, default to 1.0.
-        if (!(iss >> u >> v))
-            continue;
-        if (!(iss >> w))
-            w = 1.0;
-        if (u < 0 || u >= g.n || v < 0 || v >= g.n)
-            continue; // skip invalid nodes.
-        // Undirected edge: add both directions.
-        g.adj[u].push_back({v, w});
-        g.adj[v].push_back({u, w});
-        g.degree[u] += w;
-        g.degree[v] += w;
-        edgeCount++;
-    }
-    in.close();
-
-    double totalDegree = 0.0;
-    for (int i = 0; i < g.n; ++i)
-        totalDegree += g.degree[i];
-    g.m = totalDegree / 2.0; // Each edge counted twice.
-    std::cout << "Graph loaded: " << g.n << " nodes, " << edgeCount 
-              << " edge lines read, total weighted m = " << g.m << "\n";
-    return g;
-}
-
-// -------------------------------------------------------------------------
-// Computes modularity Q using the weighted formula.
-// Q = (1/(2*m)) * sum_c [ L_c - (d_c^2)/(2*m) ]
-double computeModularity(const Graph &g, const std::vector<int> &community) {
-    int n = g.n;
-    double m_total = 2.0 * g.m; // Total weight (each edge appears twice)
-    std::unordered_map<int, double> comm_tot;  // Total degree per community.
-    std::unordered_map<int, double> comm_in;   // Sum of internal edge weights.
-
-    for (int i = 0; i < n; ++i) {
-        int c = community[i];
-        comm_tot[c] += g.degree[i];
-        for (const auto &edge : g.adj[i]) {
-            if (edge.neighbor > i && community[edge.neighbor] == c)
-                comm_in[c] += edge.weight;
-        }
-    }
-    double Q = 0.0;
-    for (const auto &entry : comm_tot) {
-        int c = entry.first;
-        double tot = entry.second;
-        double in = comm_in[c];
-        Q += (in / g.m) - std::pow(tot / m_total, 2);
-    }
-    return Q;
-}
-
-// -------------------------------------------------------------------------
 // Helper: Performs one pass (sweep) of local node moves.
 // For each node, computes the gain in modularity if moving it to a neighboring community
 // and reassigns the node if the best gain is positive.
@@ -237,7 +58,6 @@ static bool localMovePass(const Graph &g, std::vector<int> &community, std::vect
     return moved;
 }
 
-// -------------------------------------------------------------------------
 // Local move phase: repeatedly perform local node moves until convergence.
 // Returns the partition for the current graph (each node's community).
 static std::vector<int> localMovePhase(const Graph &g) {
@@ -265,7 +85,6 @@ static std::vector<int> localMovePhase(const Graph &g) {
     return partition;
 }
 
-// -------------------------------------------------------------------------
 // Aggregates graph g given a partition.
 // Creates a new graph where each node corresponds to a community from "partition".
 // The mapping "commMap" (old community label -> new node index) is filled by this function.
@@ -306,7 +125,6 @@ Graph aggregateGraph(const Graph &g, const std::vector<int> &partition, std::uno
     return g_new;
 }
 
-// -------------------------------------------------------------------------
 // Recursive function that computes the full hierarchical decomposition.
 // For each level, the partition is recorded in the Hierarchy object.
 // The base case is reached when no aggregation is possible (i.e. each node remains separate).
@@ -333,7 +151,6 @@ static void runLouvainHierarchy(const Graph &g, Hierarchy &H) {
     runLouvainHierarchy(g_new, H);
 }
 
-// -------------------------------------------------------------------------
 // Top-level interface for the hierarchical sequential Louvain algorithm.
 // This function computes the full hierarchical decomposition and stores it in hierarchy.
 void louvainHierarchical(const Graph &g, Hierarchy &hierarchy, CoreType coreType) {
