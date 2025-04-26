@@ -33,7 +33,16 @@ struct Hierarchy {
     std::vector<std::vector<int>> partitions;
 };
 
-// Helper function to set thread affinity to specific core type
+// Set thread affinity to a specific CPU ID
+void setThreadAffinityToCpu(int cpuId);
+
+// Get the appropriate CPU ID range for a core type
+std::vector<int> getCpuIdsForCoreType(CoreType coreType);
+
+// Set thread affinity based on core type
+void setThreadAffinityCoreType(CoreType coreType);
+
+// Helper function to set thread affinity to specific core type (legacy function)
 void setCoreAffinity(CoreType coreType);
 
 // Reads a graph from a file. File format:
@@ -50,6 +59,6 @@ double computeModularity(const Graph &g, const std::vector<int> &community);
 // and builds a full hierarchical decomposition stored in "hierarchy".
 // The full hierarchy is stored as a sequence of partitions.
 // Added coreType parameter to specify which type of core to run on.
-void louvainHierarchical(const Graph &g, Hierarchy &hierarchy, CoreType coreType = P_CORE);
+void louvainHierarchical(const Graph &g, Hierarchy &hierarchy, CoreType coreType = ANY_CORE);
 
 #endif // LOUVAIN_SEQ_H
