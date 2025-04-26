@@ -8,6 +8,6 @@
 // and builds a full hierarchical decomposition stored in "hierarchy".
 // The full hierarchy is stored as a sequence of partitions.
 // Added coreType parameter to specify which type of core to run on.
-void louvainHierarchical(const Graph &g, Hierarchy &hierarchy, CoreType coreType = P_CORE);
+void louvainHierarchical(const Graph &g, Hierarchy &hierarchy);
 
 #endif // LOUVAIN_SEQ_H
