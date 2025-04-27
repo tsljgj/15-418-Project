@@ -8,18 +8,22 @@
 #include <chrono>
 #include <unordered_set>
 #include <cstring>
-// In test_louvain.cpp update the printUsage function:
 
 void printUsage(const char* programName) {
-    std::cerr << "Usage: " << programName << " <input_file> [-S|-P|-V [-n num_threads]] [-p|-e|-a]\n";
+    std::cerr << "Usage: " << programName << " <input_file> [-S|-P|-V] [options]\n";
     std::cerr << "Options:\n";
     std::cerr << "  -S               Run sequential Louvain algorithm (default)\n";
     std::cerr << "  -P               Run naive parallel Louvain algorithm\n";
     std::cerr << "  -V               Run parallel Louvain algorithm with Vertex Following and Coloring\n";
-    std::cerr << "  -n num_threads   Number of threads/partitions to use (default: 1)\n";
-    std::cerr << "  -p               Run on P-cores (performance cores)\n";
-    std::cerr << "  -e               Run on E-cores (efficiency cores)\n";
-    std::cerr << "  -a               Use any available cores (system decides, default)\n";
+    std::cerr << "  For sequential algorithm:\n";
+    std::cerr << "    -p             Run on P-cores (performance cores)\n";
+    std::cerr << "    -e             Run on E-cores (efficiency cores)\n";
+    std::cerr << "    -a             Use any available cores (system decides, default)\n";
+    std::cerr << "  For parallel algorithms:\n";
+    std::cerr << "    -pc num        Number of P-cores to use\n";
+    std::cerr << "    -ec num        Number of E-cores to use\n";
+    std::cerr << "    -a num         Use 'num' threads on any available cores (system decides)\n";
+    std::cerr << "    -n num         DEPRECATED: Same as -a num\n";
 }
 
 int main(int argc, char* argv[]) {
@@ -32,6 +36,11 @@ int main(int argc, char* argv[]) {
     enum AlgorithmType { SEQUENTIAL, NAIVE_PARALLEL, PARALLEL_VFC };
     AlgorithmType algorithm = SEQUENTIAL;
     int numThreads = 1;
+    
+    // New variables for P-core and E-core counts
+    int pCoreCount = 0;
+    int eCoreCount = 0;
+    bool useSystemCores = true; // Default to system choosing cores
     
     // Parse command line arguments
     CoreType coreType = ANY_CORE; // Default to any core (system decides)
@@ -47,20 +56,80 @@ int main(int argc, char* argv[]) {
             algorithm = PARALLEL_VFC;
         }
         else if (strcmp(argv[i], "-n") == 0 && i + 1 < argc) {
+            // Legacy option
             numThreads = std::atoi(argv[++i]);
             if (numThreads <= 0) {
                 std::cerr << "Error: Number of threads must be positive\n";
                 return EXIT_FAILURE;
             }
+            std::cout << "Warning: -n is deprecated. Use -a for system-decided cores.\n";
         }
+        // Sequential mode core options
         else if (strcmp(argv[i], "-p") == 0) {
-            coreType = P_CORE;
+            if (algorithm == SEQUENTIAL) {
+                coreType = P_CORE;
+            } else {
+                std::cerr << "Error: -p flag is only for sequential algorithm\n";
+                printUsage(argv[0]);
+                return EXIT_FAILURE;
+            }
         }
         else if (strcmp(argv[i], "-e") == 0) {
-            coreType = E_CORE;
+            if (algorithm == SEQUENTIAL) {
+                coreType = E_CORE;
+            } else {
+                std::cerr << "Error: -e flag is only for sequential algorithm\n";
+                printUsage(argv[0]);
+                return EXIT_FAILURE;
+            }
+        }
+        // Parallel mode core options
+        else if (strcmp(argv[i], "-pc") == 0 && i + 1 < argc) {
+            if (algorithm != SEQUENTIAL) {
+                pCoreCount = std::atoi(argv[++i]);
+                if (pCoreCount > 8) {
+                    std::cerr << "Error: P-core count cannot exceed 8\n";
+                    return EXIT_FAILURE;
+                }
+                useSystemCores = false;
+            } else {
+                std::cerr << "Error: -pc flag is only for parallel algorithms\n";
+                printUsage(argv[0]);
+                return EXIT_FAILURE;
+            }
+        }
+        else if (strcmp(argv[i], "-ec") == 0 && i + 1 < argc) {
+            if (algorithm != SEQUENTIAL) {
+                eCoreCount = std::atoi(argv[++i]);
+                if (eCoreCount > 16) {
+                    std::cerr << "Error: E-core count cannot exceed 16\n";
+                    return EXIT_FAILURE;
+                }
+                useSystemCores = false;
+            } else {
+                std::cerr << "Error: -ec flag is only for parallel algorithms\n";
+                printUsage(argv[0]);
+                return EXIT_FAILURE;
+            }
         }
         else if (strcmp(argv[i], "-a") == 0) {
-            coreType = ANY_CORE;
+            if (algorithm == SEQUENTIAL) {
+                coreType = ANY_CORE;
+            } else {
+                // For parallel, -a requires a thread count
+                if (i + 1 < argc) {
+                    numThreads = std::atoi(argv[++i]);
+                    if (numThreads <= 0) {
+                        std::cerr << "Error: Number of threads must be positive\n";
+                        return EXIT_FAILURE;
+                    }
+                    useSystemCores = true;
+                } else {
+                    std::cerr << "Error: -a for parallel algorithms requires a thread count\n";
+                    printUsage(argv[0]);
+                    return EXIT_FAILURE;
+                }
+            }
         }
         else {
             printUsage(argv[0]);
@@ -89,13 +158,18 @@ int main(int argc, char* argv[]) {
             louvainHierarchical(g, H, coreType);
             break;
         case NAIVE_PARALLEL:
-            std::cout << "Running naive parallel Louvain algorithm with " << numThreads << " threads\n";
-            // Note: For parallel algorithms, we don't set specific core affinity as threads
-            // will be distributed by the system. However, you could extend this functionality
-            // by modifying the parallel implementations as well.
-            louvainParallel(g, H, numThreads);
+            if (useSystemCores) {
+                std::cout << "Running naive parallel Louvain algorithm with " << numThreads 
+                          << " threads (system decided)\n";
+                louvainParallel(g, H, numThreads);
+            } else {
+                std::cout << "Running naive parallel Louvain algorithm with " 
+                          << pCoreCount << " P-cores and " << eCoreCount << " E-cores\n";
+                louvainParallel(g, H, pCoreCount + eCoreCount, pCoreCount, eCoreCount);
+            }
             break;
         case PARALLEL_VFC:
+            // For now, VFC implementation still uses system-decided core allocation
             std::cout << "Running parallel Louvain algorithm with Vertex Following and Coloring using " 
                       << numThreads << " threads\n";
             louvainParallelVFC(g, H, numThreads);

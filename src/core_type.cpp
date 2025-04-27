@@ -4,6 +4,8 @@
 #include <thread>
 #include <vector>
 #include <windows.h>
+#include <omp.h>
+#include <chrono>
 
 // Set thread affinity to a specific CPU ID
 void setThreadAffinityToCpu(int cpuId) {
@@ -13,12 +15,18 @@ void setThreadAffinityToCpu(int cpuId) {
     
     std::cout << "Setting thread " << threadId << " to CPU " << cpuId << std::endl;
     
+    // Measure time spent on SetThreadAffinityMask
+    // auto start_time = std::chrono::high_resolution_clock::now();
     BOOL result = SetThreadAffinityMask(currentThread, affinityMask);
+    // auto end_time = std::chrono::high_resolution_clock::now();
+    // std::chrono::duration<double> elapsed_seconds = end_time - start_time;
+    
     if (result == 0) {
         std::cerr << "Error setting thread affinity to CPU " << cpuId 
                   << ": " << GetLastError() << " for Thread ID: " << threadId << std::endl;
     } else {
         std::cout << "Thread " << threadId << " successfully assigned to CPU " << cpuId << std::endl;
+                //   << " (SetThreadAffinityMask took " << elapsed_seconds.count() << " seconds)" << std::endl;
     }
 }
 
@@ -103,4 +111,32 @@ void setThreadAffinityCoreType(CoreType coreType) {
 void setCoreAffinity(CoreType coreType) {
     // Simply call the new function
     setThreadAffinityCoreType(coreType);
+}
+
+// Assign specific P-cores and E-cores for parallel execution
+std::vector<int> assignParallelCores(int pCoreCount, int eCoreCount) {
+    std::vector<int> coreAssignments;
+    
+    // Validate core counts
+    if (pCoreCount > 8) {
+        std::cerr << "Error: Requested P-core count (" << pCoreCount << ") exceeds maximum (8)\n";
+        return coreAssignments;
+    }
+    
+    if (eCoreCount > 16) {
+        std::cerr << "Error: Requested E-core count (" << eCoreCount << ") exceeds maximum (16)\n";
+        return coreAssignments;
+    }
+    
+    // Assign P-cores (use even indices to avoid hyperthreading)
+    for (int i = 0; i < pCoreCount; i++) {
+        coreAssignments.push_back(i * 2 + 1); // 0, 2, 4, 6, 8, 10, 12, 14
+    }
+    
+    // Assign E-cores (16-31)
+    for (int i = 0; i < eCoreCount; i++) {
+        coreAssignments.push_back(16 + i); // 16, 17, 18, ...
+    }
+    
+    return coreAssignments;
 }

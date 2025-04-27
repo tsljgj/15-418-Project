@@ -23,4 +23,10 @@ void setThreadAffinityCoreType(CoreType coreType);
 // Helper function to set thread affinity to specific core type (legacy function)
 void setCoreAffinity(CoreType coreType);
 
+// New function: Assign specific numbers of P-cores and E-cores for parallel execution
+std::vector<int> assignParallelCores(int pCoreCount, int eCoreCount);
+
+// New function: Ensure thread affinity persistence
+void ensureThreadAffinity();
+
 #endif // CORE_TYPE_H

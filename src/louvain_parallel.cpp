@@ -2,6 +2,7 @@
 #include "louvain_seq.h"  // for fallback when numThreads == 1
 #include "graph.h"
 #include "hierarchy.h"
+#include "core_type.h"
 
 #include <omp.h>
 #include <vector>
@@ -116,14 +117,64 @@ static Graph aggregateGraph(const Graph &g,
 }
 
 // --------- Top‐level parallel Louvain ---------
-void louvainParallel(const Graph &g0, Hierarchy &H, int numThreads) {
+void louvainParallel(const Graph &g0, Hierarchy &H, int numThreads, int pCoreCount, int eCoreCount) {
     // Fast fallback if only 1 thread requested
     if (numThreads <= 1) {
         louvainHierarchical(g0, H);
         return;
     }
+    
+    // Create vector of core assignments
+    std::vector<int> coreAssignments;
+    bool useSpecificCores = (pCoreCount > 0 || eCoreCount > 0);
+    
+    // If specific core counts are provided, set up thread affinity
+    if (useSpecificCores) {
+        coreAssignments = assignParallelCores(pCoreCount, eCoreCount);
+        
+        if (coreAssignments.empty()) {
+            // Error already reported in assignParallelCores
+            return;
+        }
+        
+        // Print the core assignments
+        std::cout << "Core assignments: ";
+        for (size_t i = 0; i < coreAssignments.size(); i++) {
+            std::cout << coreAssignments[i];
+            if (i < coreAssignments.size() - 1) {
+                std::cout << ", ";
+            }
+        }
+        std::cout << std::endl;
+        
+        // The total number of threads will be the sum of the core counts
+        numThreads = pCoreCount + eCoreCount;
+    } else {
+        std::cout << "Using " << numThreads << " threads with system-decided core affinity\n";
+    }
+    
     omp_set_num_threads(numThreads);
+    
+    // Set thread affinity ONCE at the beginning
+    if (useSpecificCores) {
+        #pragma omp parallel
+        {
+            int threadId = omp_get_thread_num();
+            if (threadId < static_cast<int>(coreAssignments.size())) {
+                setThreadAffinityToCpu(coreAssignments[threadId]);
+                
+                // Print confirmation from each thread
+                #pragma omp critical
+                {
+                    std::cout << "Thread " << threadId << " pinned to CPU " 
+                              << coreAssignments[threadId] << std::endl;
+                }
+            }
+        }
+        
+    }
 
+    // Rest of the function
     Graph g = g0;
     std::vector<int> C(g.n);
     std::iota(C.begin(), C.end(), 0);
