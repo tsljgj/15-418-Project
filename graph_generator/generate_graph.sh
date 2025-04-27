@@ -12,7 +12,16 @@ echo "-------------------------------------"
 
 # Generate community graph
 echo "Generating community graph..."
-./graph_generator community_graph_5e5.txt community 50000 50 0.3 0.02 1.0 10.0
+# ./graph_generator small-world_5e5_dense_intra.txt community 50000 50 0.9 0.01 1.0 15.0
+# ./graph_generator small-world_2k_v_dense.txt community 2000 10 0.99 0.1 1.0 15.0
+./graph_generator random_5e5_dense.txt community 50000 5 0.95 0.2 1.0 15.0
+./graph_generator small-world_1e5_med_com.txt community 10000 200 0.6 0.05 1.0 15.0
+# ./graph_generator preferential_2k_dense_overlap.txt community 2000 50 0.8 0.3 1.0 15.0
+./graph_generator preferential_1e5_med_sparse.txt community 10000 150 0.5 0.02 1.0 15.0
+# ./graph_generator preferential_1k_hi_intra_inter.txt community 1000 20 0.7 0.6 1.0 15.0
+./graph_generator Hierarchical_1e5_few_dense.txt community 10000 30 0.9 0.005 1.0 15.0
+# ./graph_generator Hierarchical_2k_many_sparse.txt community 2000 200 0.2 0.05 1.0 15.0
+# ./graph_generator Hierarchical_5e5_med_overlap.txt community 500000 120 0.55 0.1 1.0 15.0
 
 # Generate preferential attachment graph (500 nodes)
 # echo "Generating preferential attachment graph..."
