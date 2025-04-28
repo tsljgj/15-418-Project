@@ -1,6 +1,10 @@
 #include "louvain_seq.h"
 #include "louvain_parallel.h"
 #include "louvain_parallel_vfc.h"
+#include "louvain_parallel_bl.h"
+#include "louvain_parallel_static.h"
+#include "louvain_parallel_static_bl.h"
+#include "louvain_parallel_vfc_bl.h"
 
 #include <iostream>
 #include <string>
@@ -10,11 +14,15 @@
 #include <cstring>
 
 void printUsage(const char* programName) {
-    std::cerr << "Usage: " << programName << " <input_file> [-S|-P|-V] [options]\n";
+    std::cerr << "Usage: " << programName << " <input_file> [-S|-P|-V|-B|-PS|-PSB|-VB] [options]\n";
     std::cerr << "Options:\n";
     std::cerr << "  -S               Run sequential Louvain algorithm (default)\n";
     std::cerr << "  -P               Run naive parallel Louvain algorithm\n";
-    std::cerr << "  -V               Run parallel Louvain algorithm with Vertex Following and Coloring\n";
+    std::cerr << "  -V               Run parallel Louvain with Vertex Following and Coloring\n";
+    std::cerr << "  -B               Run parallel Louvain baseline\n";
+    std::cerr << "  -PS              Run parallel Louvain with static scheduling\n";
+    std::cerr << "  -PSB             Run parallel Louvain static baseline\n";
+    std::cerr << "  -VB              Run parallel Louvain VFC baseline\n";
     std::cerr << "  For sequential algorithm:\n";
     std::cerr << "    -p             Run on P-cores (performance cores)\n";
     std::cerr << "    -e             Run on E-cores (efficiency cores)\n";
@@ -33,11 +41,19 @@ int main(int argc, char* argv[]) {
     }
     
     std::string input_filename = argv[1];
-    enum AlgorithmType { SEQUENTIAL, NAIVE_PARALLEL, PARALLEL_VFC };
+    enum AlgorithmType { 
+        SEQUENTIAL, 
+        NAIVE_PARALLEL, 
+        PARALLEL_VFC, 
+        PARALLEL_BASELINE,
+        PARALLEL_STATIC,
+        PARALLEL_STATIC_BASELINE,
+        PARALLEL_VFC_BASELINE
+    };
     AlgorithmType algorithm = SEQUENTIAL;
     int numThreads = 1;
     
-    // New variables for P-core and E-core counts
+    // Variables for P-core and E-core counts
     int pCoreCount = 0;
     int eCoreCount = 0;
     bool useSystemCores = true; // Default to system choosing cores
@@ -55,8 +71,19 @@ int main(int argc, char* argv[]) {
         else if (strcmp(argv[i], "-V") == 0) {
             algorithm = PARALLEL_VFC;
         }
+        else if (strcmp(argv[i], "-B") == 0) {
+            algorithm = PARALLEL_BASELINE;
+        }
+        else if (strcmp(argv[i], "-PS") == 0) {
+            algorithm = PARALLEL_STATIC;
+        }
+        else if (strcmp(argv[i], "-PSB") == 0) {
+            algorithm = PARALLEL_STATIC_BASELINE;
+        }
+        else if (strcmp(argv[i], "-VB") == 0) {
+            algorithm = PARALLEL_VFC_BASELINE;
+        }
         else if (strcmp(argv[i], "-n") == 0 && i + 1 < argc) {
-            // Legacy option
             numThreads = std::atoi(argv[++i]);
             if (numThreads <= 0) {
                 std::cerr << "Error: Number of threads must be positive\n";
@@ -116,7 +143,6 @@ int main(int argc, char* argv[]) {
             if (algorithm == SEQUENTIAL) {
                 coreType = ANY_CORE;
             } else {
-                // For parallel, -a requires a thread count
                 if (i + 1 < argc) {
                     numThreads = std::atoi(argv[++i]);
                     if (numThreads <= 0) {
@@ -169,10 +195,25 @@ int main(int argc, char* argv[]) {
             }
             break;
         case PARALLEL_VFC:
-            // For now, VFC implementation still uses system-decided core allocation
             std::cout << "Running parallel Louvain algorithm with Vertex Following and Coloring using " 
                       << numThreads << " threads\n";
             louvainParallelVFC(g, H, numThreads);
+            break;
+        case PARALLEL_BASELINE:
+            std::cout << "Running parallel Louvain baseline algorithm with " << numThreads << " threads\n";
+            louvainParallelBL(g, H, numThreads);
+            break;
+        case PARALLEL_STATIC:
+            std::cout << "Running parallel Louvain with static scheduling using " << numThreads << " threads\n";
+            louvainParallelStatic(g, H, numThreads);
+            break;
+        case PARALLEL_STATIC_BASELINE:
+            std::cout << "Running parallel Louvain static baseline algorithm with " << numThreads << " threads\n";
+            louvainParallelStaticBL(g, H, numThreads);
+            break;
+        case PARALLEL_VFC_BASELINE:
+            std::cout << "Running parallel Louvain VFC baseline algorithm with " << numThreads << " threads\n";
+            louvainParallelVFCBL(g, H, numThreads);
             break;
     }
     
