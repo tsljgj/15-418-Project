@@ -3,15 +3,16 @@
 Louvain Algorithm Benchmark Script
 
 This script runs different versions of the Louvain community
-detection algorithm with varying thread counts and measures performance metrics.
-It automatically establishes sequential baselines on both P-cores and E-cores
-for comparison.
+detection algorithm and measures performance metrics on heterogeneous systems.
+It uses all available resources (P-cores and E-cores) for testing.
 
 Usage:
-    python src/checker.py <input_file> [--algorithm ALGORITHM] [--threads THREADS] [--runs RUNS]
+    python src/checker.py <input_file> [--algorithm ALGORITHM] [--threads THREADS] 
+                         [--p-e-ratio P_E_RATIO] [--runs RUNS]
 
 Example:
-    python src/checker.py inputs/community_graph_5e5.txt --algorithm naive,vfc --threads 1,2,4,8 --runs 1
+    python src/checker.py inputs/your_graph_file.txt --algorithm naive,vfc,naive_bl 
+           --p-e-ratio 4:12,8:8 --runs 3
 """
 
 import subprocess
@@ -31,9 +32,11 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description='Benchmark Louvain algorithm implementations.')
     parser.add_argument('input_file', help='Input graph file path')
     parser.add_argument('--algorithm', 
-                      help='Comma-separated list of algorithms to test (naive,vfc) (default: naive,vfc)')
+                      help='Comma-separated list of algorithms to test (sequential,naive,vfc,naive_bl,static,static_bl,vfc_bl) (default: naive,vfc,naive_bl)')
     parser.add_argument('--threads', 
-                      help='Comma-separated list of thread counts to test (default: 1,2,4,8)')
+                      help='Comma-separated list of thread counts to test for system-decided cores')
+    parser.add_argument('--p-e-ratio', 
+                      help='Comma-separated list of P:E core ratios to test (e.g., 4:12,8:8,2:16)')
     parser.add_argument('--runs', type=int, default=1, 
                       help='Number of runs for each configuration (default: 1)')
 
@@ -54,26 +57,47 @@ def parse_arguments():
 
     # Set defaults if not provided
     if args.algorithm is None:
-        args.algorithm = 'naive,vfc'
-    if args.threads is None:
-        args.threads = '1,2,4,8'
+        args.algorithm = 'naive,vfc,naive_bl'
+    if args.threads is None and args.p_e_ratio is None:
+        # Default P:E ratio of 4:12 (using all 16 cores on an i9-14900K)
+        args.p_e_ratio = '4:12'
     
     return args
 
-def run_louvain(executable, input_file, algorithm="sequential", num_threads=1, core_type=None):
+def run_louvain(executable, input_file, algorithm="sequential", num_threads=None, core_type=None, 
+                p_cores=None, e_cores=None):
     """Run the Louvain algorithm and capture output."""
     # Build command
     cmd = [executable, input_file]
+    
+    # Map algorithm names to command line flags
+    algo_flags = {
+        "sequential": "-S",
+        "naive": "-P",
+        "vfc": "-V",
+        "naive_bl": "-B",
+        "static": "-PS",
+        "static_bl": "-PSB",
+        "vfc_bl": "-VB"
+    }
+    
+    # Add algorithm flag
+    if algorithm in algo_flags:
+        cmd.append(algo_flags[algorithm])
+    
+    # Add core-specific flags
     if algorithm == "sequential":
-        cmd.append('-S')
         if core_type == "p":
             cmd.append('-p')
         elif core_type == "e":
             cmd.append('-e')
-    elif algorithm == "naive":
-        cmd.extend(['-P', '-n', str(num_threads)])
-    elif algorithm == "vfc":
-        cmd.extend(['-V', '-n', str(num_threads)])
+    else:
+        # For all parallel algorithms
+        if p_cores is not None and e_cores is not None:
+            cmd.extend(['-pc', str(p_cores), '-ec', str(e_cores)])
+        elif num_threads is not None:
+            # System decides core allocation
+            cmd.extend(['-a', str(num_threads)])
     
     # Run process and capture output
     try:
@@ -164,74 +188,130 @@ def run_benchmarks(args):
         print(f"{Fore.RED}Error: Input file not found at {args.input_file}{Style.RESET_ALL}")
         return
     
-    # Parse thread counts
-    try:
-        thread_counts = [int(t) for t in args.threads.split(',')]
-        # Sort thread counts to ensure they appear in ascending order
-        thread_counts.sort()
-    except ValueError:
-        print(f"{Fore.RED}Error: Invalid thread counts. Please provide comma-separated integers.{Style.RESET_ALL}")
-        return
+    # Parse configurations
+    algorithms = [algo.strip().lower() for algo in args.algorithm.split(',')]
     
-    # Parse algorithms - always include 'sequential' internally
-    requested_algorithms = [algo.strip().lower() for algo in args.algorithm.split(',')]
-    algorithms = ['sequential']  # Always run sequential first for baselines
-    algorithms.extend([algo for algo in requested_algorithms if algo != 'sequential'])
+    # Parse thread/core configurations
+    system_thread_counts = []
+    if args.threads:
+        system_thread_counts = [int(t) for t in args.threads.split(',')]
+        system_thread_counts.sort()
     
-    valid_algorithms = ["sequential", "naive", "vfc"]
+    # Parse P:E ratios
+    p_e_ratios = []
+    if args.p_e_ratio:
+        for ratio in args.p_e_ratio.split(','):
+            try:
+                p, e = map(int, ratio.split(':'))
+                p_e_ratios.append((p, e))
+            except ValueError:
+                print(f"{Fore.RED}Error: Invalid P:E ratio '{ratio}'. Format should be P:E (e.g., 4:12){Style.RESET_ALL}")
+                return
+    
+    # Validate algorithms
+    valid_algorithms = ["sequential", "naive", "vfc", "naive_bl", "static", "static_bl", "vfc_bl"]
+    algo_display_names = {
+        "sequential": "Sequential",
+        "naive": "Naive Parallel",
+        "vfc": "VFC (Vertex Following + Coloring)",
+        "naive_bl": "Naive Parallel + Big.LITTLE",
+        "static": "Static Scheduling",
+        "static_bl": "Static + Big.LITTLE",
+        "vfc_bl": "VFC + Big.LITTLE"
+    }
+    
     for algo in algorithms:
         if algo not in valid_algorithms:
             print(f"{Fore.RED}Error: Invalid algorithm '{algo}'. Valid options are: {', '.join(valid_algorithms)}{Style.RESET_ALL}")
             return
     
-    # Core types - always run both P and E cores for sequential
-    core_types = ["p", "e"]
-    
     # Print benchmark configuration
     print_section("CONFIGURATION")
     print(f"Input file:  {Fore.GREEN}{args.input_file}{Style.RESET_ALL}")
-    print(f"Requested algorithms: {Fore.GREEN}{', '.join(requested_algorithms)}{Style.RESET_ALL}")
-    print(f"Thread counts: {Fore.GREEN}{', '.join(map(str, thread_counts))}{Style.RESET_ALL}")
-    print(f"Sequential baselines: {Fore.GREEN}P-core and E-core{Style.RESET_ALL}")
+    print(f"Algorithms: {Fore.GREEN}{', '.join([algo_display_names.get(algo, algo) for algo in algorithms])}{Style.RESET_ALL}")
+    if system_thread_counts:
+        print(f"System-decided thread counts: {Fore.GREEN}{', '.join(map(str, system_thread_counts))}{Style.RESET_ALL}")
+    if p_e_ratios:
+        print(f"P:E core ratios: {Fore.GREEN}{', '.join([f'{p}:{e}' for p, e in p_e_ratios])}{Style.RESET_ALL}")
     print(f"Runs per configuration: {Fore.GREEN}{args.runs}{Style.RESET_ALL}")
     print(f"Executable: {Fore.GREEN}{args.executable}{Style.RESET_ALL}")
-
-    # Dictionary to store all results for final comparison
+    
+    # Dictionary to store all results
     all_results = {}
     
-    # Variables to store sequential baseline results
-    sequential_p_runtime = None
-    sequential_e_runtime = None
-    sequential_p_modularity = None
-    sequential_e_modularity = None
+    # Run sequential baselines first (always on P and E cores)
+    print_section("RUNNING SEQUENTIAL BASELINES")
+    sequential_results = []
+    for core_type in ['p', 'e']:
+        print(f"\nBenchmarking sequential on {Fore.GREEN}{core_type.upper()}-cores{Style.RESET_ALL}:")
+        
+        runs_runtimes = []
+        runs_modularities = []
+        
+        for i in range(args.runs):
+            print(f"  Run {i+1}/{args.runs}...", end="", flush=True)
+            stdout, returncode, stderr = run_louvain(args.executable, args.input_file, 
+                                                     "sequential", None, core_type)
+            
+            if returncode == 0:
+                runtime, modularity = extract_metrics(stdout)
+                runs_runtimes.append(runtime)
+                runs_modularities.append(modularity)
+                print(f" {Fore.GREEN}Done{Style.RESET_ALL} (Runtime: {runtime:.3f}s, Modularity: {modularity:.6f})")
+            else:
+                print(f" {Fore.RED}Failed{Style.RESET_ALL}")
+        
+        # Calculate statistics
+        if runs_runtimes:
+            avg_runtime = statistics.mean(runs_runtimes)
+            avg_modularity = statistics.mean(runs_modularities)
+            
+            sequential_results.append([
+                f"sequential_{core_type}",
+                1,
+                core_type.upper(),
+                "-",
+                "-",
+                f"{avg_runtime:.3f}",
+                f"{avg_modularity:.6f}"
+            ])
+            
+            # Store results
+            key = f"sequential_{core_type}"
+            all_results[key] = {
+                "algorithm": "sequential",
+                "threads": 1,
+                "core_type": core_type,
+                "p_cores": None,
+                "e_cores": None,
+                "runtime": avg_runtime,
+                "modularity": avg_modularity
+            }
     
-    # Run benchmarks for each algorithm
+    # Print sequential results
+    headers = ["Configuration", "Threads", "Core Type", "P-cores", "E-cores", "Runtime (s)", "Modularity"]
+    print_table(headers, sequential_results)
+    
+    # Run parallel algorithms
     for algorithm in algorithms:
-        print_section(f"RUNNING {algorithm.upper()} ALGORITHM")
-        
-        # For sequential, we need to run it with both P and E cores
         if algorithm == "sequential":
-            thread_counts_to_use = [1]  # Sequential always uses 1 thread
-            core_types_to_use = core_types  # Test both P and E cores
-        else:
-            thread_counts_to_use = thread_counts
-            core_types_to_use = [None]  # No core type for parallel algorithms
-        
+            continue  # Already done
+            
+        print_section(f"RUNNING {algo_display_names.get(algorithm, algorithm.upper())} ALGORITHM")
         algorithm_results = []
         
-        for core_type in core_types_to_use:
-            for threads in thread_counts_to_use:
-                print_info = f"\nBenchmarking with {Fore.GREEN}{threads}{Style.RESET_ALL} thread(s)"
-                if core_type:
-                    print_info += f" on {Fore.GREEN}{core_type.upper()}-cores{Style.RESET_ALL}"
-                print(print_info + ":")
+        # Test with system-decided cores
+        if system_thread_counts:
+            for threads in system_thread_counts:
+                print(f"\nBenchmarking with {Fore.GREEN}{threads}{Style.RESET_ALL} thread(s) (system-decided):")
                 
                 runs_runtimes = []
                 runs_modularities = []
                 
                 for i in range(args.runs):
                     print(f"  Run {i+1}/{args.runs}...", end="", flush=True)
-                    stdout, returncode, stderr = run_louvain(args.executable, args.input_file, algorithm, threads, core_type)
+                    stdout, returncode, stderr = run_louvain(args.executable, args.input_file, 
+                                                             algorithm, threads)
                     
                     if returncode == 0:
                         runtime, modularity = extract_metrics(stdout)
@@ -241,83 +321,85 @@ def run_benchmarks(args):
                     else:
                         print(f" {Fore.RED}Failed{Style.RESET_ALL}")
                 
-                # Calculate statistics for this thread count
+                # Calculate statistics
                 if runs_runtimes:
                     avg_runtime = statistics.mean(runs_runtimes)
                     avg_modularity = statistics.mean(runs_modularities)
                     
-                    # Add core type information for sequential algorithm
-                    if core_type:
-                        result_row = [
-                            threads,
-                            core_type.upper(),
-                            f"{avg_runtime:.3f}",
-                            f"{avg_modularity:.6f}"
-                        ]
-                    else:
-                        result_row = [
-                            threads,
-                            "N/A",
-                            f"{avg_runtime:.3f}",
-                            f"{avg_modularity:.6f}"
-                        ]
+                    algorithm_results.append([
+                        f"{algorithm}_system",
+                        threads,
+                        "SYSTEM",
+                        "-",
+                        "-",
+                        f"{avg_runtime:.3f}",
+                        f"{avg_modularity:.6f}"
+                    ])
                     
-                    algorithm_results.append(result_row)
-                    
-                    # Store for final comparison
-                    key = f"{algorithm}_{threads}_{core_type}" if core_type else f"{algorithm}_{threads}"
+                    # Store results
+                    key = f"{algorithm}_sys_{threads}"
                     all_results[key] = {
                         "algorithm": algorithm,
                         "threads": threads,
-                        "core_type": core_type,
+                        "core_type": "system",
+                        "p_cores": None,
+                        "e_cores": None,
                         "runtime": avg_runtime,
                         "modularity": avg_modularity
                     }
+        
+        # Test with specific P:E ratios
+        if p_e_ratios:
+            for p_cores, e_cores in p_e_ratios:
+                print(f"\nBenchmarking with {Fore.GREEN}{p_cores} P-cores and {e_cores} E-cores{Style.RESET_ALL}:")
+                
+                runs_runtimes = []
+                runs_modularities = []
+                
+                for i in range(args.runs):
+                    print(f"  Run {i+1}/{args.runs}...", end="", flush=True)
+                    stdout, returncode, stderr = run_louvain(args.executable, args.input_file, 
+                                                            algorithm, None, None, 
+                                                            p_cores, e_cores)
                     
-                    # Store sequential baselines
-                    if algorithm == "sequential" and threads == 1:
-                        if core_type == "p":
-                            sequential_p_runtime = avg_runtime
-                            sequential_p_modularity = avg_modularity
-                        elif core_type == "e":
-                            sequential_e_runtime = avg_runtime
-                            sequential_e_modularity = avg_modularity
-                else:
-                    if core_type:
-                        algorithm_results.append([threads, core_type.upper(), "N/A", "N/A"])
+                    if returncode == 0:
+                        runtime, modularity = extract_metrics(stdout)
+                        runs_runtimes.append(runtime)
+                        runs_modularities.append(modularity)
+                        print(f" {Fore.GREEN}Done{Style.RESET_ALL} (Runtime: {runtime:.3f}s, Modularity: {modularity:.6f})")
                     else:
-                        algorithm_results.append([threads, "N/A", "N/A", "N/A"])
+                        print(f" {Fore.RED}Failed{Style.RESET_ALL}")
+                
+                # Calculate statistics
+                if runs_runtimes:
+                    avg_runtime = statistics.mean(runs_runtimes)
+                    avg_modularity = statistics.mean(runs_modularities)
+                    
+                    algorithm_results.append([
+                        f"{algorithm}_p{p_cores}_e{e_cores}",
+                        p_cores + e_cores,
+                        "P+E",
+                        p_cores,
+                        e_cores,
+                        f"{avg_runtime:.3f}",
+                        f"{avg_modularity:.6f}"
+                    ])
+                    
+                    # Store results
+                    key = f"{algorithm}_p{p_cores}_e{e_cores}"
+                    all_results[key] = {
+                        "algorithm": algorithm,
+                        "threads": p_cores + e_cores,
+                        "core_type": "mixed",
+                        "p_cores": p_cores,
+                        "e_cores": e_cores,
+                        "runtime": avg_runtime,
+                        "modularity": avg_modularity
+                    }
         
-        # Sort algorithm_results by thread count before printing
-        algorithm_results.sort(key=lambda x: (x[0], x[1]))
-        
-        # Print results table for this algorithm
-        if algorithm == "sequential":
-            headers = ["Threads", "Core Type", "Runtime (s)", "Modularity"]
-        else:
-            headers = ["Threads", "Core Type", "Runtime (s)", "Modularity"]
-        print_table(headers, algorithm_results)
-        
-        # For sequential, print a direct comparison between P and E cores
-        if algorithm == "sequential" and sequential_p_runtime and sequential_e_runtime:
-            print("\nDirect P-core vs E-core comparison (Sequential algorithm):")
-            
-            runtime_diff = abs(sequential_p_runtime - sequential_e_runtime)
-            runtime_ratio = sequential_p_runtime / sequential_e_runtime if sequential_e_runtime > 0 else float('inf')
-            
-            print(f"P-core runtime: {Fore.GREEN}{sequential_p_runtime:.3f}s{Style.RESET_ALL}")
-            print(f"E-core runtime: {Fore.GREEN}{sequential_e_runtime:.3f}s{Style.RESET_ALL}")
-            print(f"Runtime difference: {Fore.GREEN}{runtime_diff:.3f}s{Style.RESET_ALL}")
-            print(f"P-core to E-core ratio: {Fore.GREEN}{runtime_ratio:.3f}x{Style.RESET_ALL}")
-            
-            if sequential_p_modularity != sequential_e_modularity:
-                print(f"Note: Modularity values differ: P-core = {sequential_p_modularity:.6f}, "
-                      f"E-core = {sequential_e_modularity:.6f}")
-    
-    # Skip output for sequential if it wasn't requested, to focus on the algorithms that were requested
-    if 'sequential' not in requested_algorithms:
-        # Remove sequential results from all_results for final comparison table
-        all_results = {k: v for k, v in all_results.items() if v['algorithm'] != 'sequential'}
+        # Print algorithm results
+        if algorithm_results:
+            print_table(headers, algorithm_results)
     
     # Final comparison across all algorithms
     if all_results:
@@ -325,105 +407,52 @@ def run_benchmarks(args):
         
         # Prepare comparison table
         comparison_data = []
+        
+        # Get sequential baselines
+        seq_p_runtime = all_results.get("sequential_p", {}).get("runtime", None)
+        seq_e_runtime = all_results.get("sequential_e", {}).get("runtime", None)
+        
         for key, result in all_results.items():
-            algorithm = result["algorithm"]
-            # Skip sequential baselines if they weren't explicitly requested
-            if algorithm == "sequential" and algorithm not in requested_algorithms:
-                continue
+            if result["algorithm"] == "sequential":
+                continue  # Skip sequential in final comparison
                 
-            threads = result["threads"]
-            core_type = result["core_type"] if result["core_type"] else "N/A"
-            runtime = result["runtime"]
-            modularity = result["modularity"]
-            
-            # Calculate speedups if we have sequential baselines
+            # Calculate speedups
             p_speedup = "N/A"
             e_speedup = "N/A"
             
-            if sequential_p_runtime and runtime > 0:
-                p_speedup = f"{sequential_p_runtime / runtime:.2f}x"
-                
-            if sequential_e_runtime and runtime > 0:
-                e_speedup = f"{sequential_e_runtime / runtime:.2f}x"
-                
+            if seq_p_runtime and result["runtime"] > 0:
+                p_speedup = f"{seq_p_runtime / result['runtime']:.2f}x"
+            
+            if seq_e_runtime and result["runtime"] > 0:
+                e_speedup = f"{seq_e_runtime / result['runtime']:.2f}x"
+            
+            core_config = ""
+            if result["core_type"] == "mixed":
+                core_config = f"{result['p_cores']}P+{result['e_cores']}E"
+            elif result["core_type"] == "system":
+                core_config = f"{result['threads']} sys"
+            else:
+                core_config = result["core_type"].upper()
+            
             row = [
-                algorithm,
-                threads,
-                core_type.upper() if core_type != "N/A" else core_type,
-                f"{runtime:.3f}",
-                f"{modularity:.6f}",
+                algo_display_names.get(result["algorithm"], result["algorithm"]),
+                result["threads"],
+                core_config,
+                f"{result['runtime']:.3f}",
+                f"{result['modularity']:.6f}",
                 p_speedup,
                 e_speedup
             ]
             
             comparison_data.append(row)
         
-        # Sort by algorithm name, thread count, and core type
-        comparison_data.sort(key=lambda x: (x[0], int(x[1]), x[2]))
+        # Sort by algorithm and thread count
+        comparison_data.sort(key=lambda x: (x[0], int(x[1])))
         
         # Print comparison table
-        headers = ["Algorithm", "Threads", "Core Type", "Runtime (s)", "Modularity", 
-                   "Speedup vs P-core", "Speedup vs E-core"]
+        headers = ["Algorithm", "Threads", "Core Config", "Runtime (s)", "Modularity", 
+                   "Speedup vs P-seq", "Speedup vs E-seq"]
         print_table(headers, comparison_data)
-        
-        # Find the best configurations
-        best_modularity_config = max(all_results.items(), key=lambda x: x[1]["modularity"])
-        best_runtime_config = min(all_results.items(), key=lambda x: x[1]["runtime"])
-        
-        print(f"\nBest modularity: {Fore.GREEN}{best_modularity_config[1]['modularity']:.6f}{Style.RESET_ALL} "
-              f"with {Fore.GREEN}{best_modularity_config[1]['algorithm']}{Style.RESET_ALL} "
-              f"using {Fore.GREEN}{best_modularity_config[1]['threads']}{Style.RESET_ALL} threads")
-        
-        if best_modularity_config[1]['core_type']:
-            print(f"  on {Fore.GREEN}{best_modularity_config[1]['core_type'].upper()}-cores{Style.RESET_ALL}")
-        
-        print(f"Best runtime: {Fore.GREEN}{best_runtime_config[1]['runtime']:.3f}s{Style.RESET_ALL} "
-              f"with {Fore.GREEN}{best_runtime_config[1]['algorithm']}{Style.RESET_ALL} "
-              f"using {Fore.GREEN}{best_runtime_config[1]['threads']}{Style.RESET_ALL} threads")
-        
-        if best_runtime_config[1]['core_type']:
-            print(f"  on {Fore.GREEN}{best_runtime_config[1]['core_type'].upper()}-cores{Style.RESET_ALL}")
-        
-        # Speedup summary
-        print_section("SPEEDUP SUMMARY")
-        
-        max_p_speedup = 0
-        max_e_speedup = 0
-        max_p_config = None
-        max_e_config = None
-        
-        for key, result in all_results.items():
-            # Skip sequential results
-            if result["algorithm"] == "sequential" and result["threads"] == 1:
-                continue
-                
-            runtime = result["runtime"]
-            if runtime > 0:
-                if sequential_p_runtime:
-                    p_speedup = sequential_p_runtime / runtime
-                    if p_speedup > max_p_speedup:
-                        max_p_speedup = p_speedup
-                        max_p_config = result
-                        
-                if sequential_e_runtime:
-                    e_speedup = sequential_e_runtime / runtime
-                    if e_speedup > max_e_speedup:
-                        max_e_speedup = e_speedup
-                        max_e_config = result
-        
-        if max_p_config:
-            print(f"Maximum speedup vs P-core sequential: {Fore.GREEN}{max_p_speedup:.2f}x{Style.RESET_ALL}")
-            print(f"  with {Fore.GREEN}{max_p_config['algorithm']}{Style.RESET_ALL} "
-                  f"using {Fore.GREEN}{max_p_config['threads']}{Style.RESET_ALL} threads")
-            if max_p_config['core_type']:
-                print(f"  on {Fore.GREEN}{max_p_config['core_type'].upper()}-cores{Style.RESET_ALL}")
-                
-        if max_e_config:
-            print(f"Maximum speedup vs E-core sequential: {Fore.GREEN}{max_e_speedup:.2f}x{Style.RESET_ALL}")
-            print(f"  with {Fore.GREEN}{max_e_config['algorithm']}{Style.RESET_ALL} "
-                  f"using {Fore.GREEN}{max_e_config['threads']}{Style.RESET_ALL} threads")
-            if max_e_config['core_type']:
-                print(f"  on {Fore.GREEN}{max_e_config['core_type'].upper()}-cores{Style.RESET_ALL}")
 
 if __name__ == "__main__":
     args = parse_arguments()

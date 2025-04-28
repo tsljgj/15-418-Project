@@ -135,7 +135,6 @@ static void runLouvainHierarchy(const Graph &g, Hierarchy &H) {
     std::cout << "Level modularity: " << Q << ", ";
     // Count unique communities.
     std::unordered_set<int> uniqueComm(partition.begin(), partition.end());
-    std::cout << "communities = " << uniqueComm.size() << "\n";
     H.partitions.push_back(partition);
     
     // If every node is alone (no aggregation possible), stop.

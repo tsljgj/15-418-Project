@@ -19,10 +19,10 @@ void printUsage(const char* programName) {
     std::cerr << "  -S               Run sequential Louvain algorithm (default)\n";
     std::cerr << "  -P               Run naive parallel Louvain algorithm\n";
     std::cerr << "  -V               Run parallel Louvain with Vertex Following and Coloring\n";
-    std::cerr << "  -B               Run parallel Louvain baseline\n";
+    std::cerr << "  -B               Run parallel Louvain Big.LITTLE optimized algorithm\n";
     std::cerr << "  -PS              Run parallel Louvain with static scheduling\n";
-    std::cerr << "  -PSB             Run parallel Louvain static baseline\n";
-    std::cerr << "  -VB              Run parallel Louvain VFC baseline\n";
+    std::cerr << "  -PSB             Run parallel Louvain static Big.LITTLE algorithm\n";
+    std::cerr << "  -VB              Run parallel Louvain VFC Big.LITTLE algorithm\n";
     std::cerr << "  For sequential algorithm:\n";
     std::cerr << "    -p             Run on P-cores (performance cores)\n";
     std::cerr << "    -e             Run on E-cores (efficiency cores)\n";
@@ -45,10 +45,10 @@ int main(int argc, char* argv[]) {
         SEQUENTIAL, 
         NAIVE_PARALLEL, 
         PARALLEL_VFC, 
-        PARALLEL_BASELINE,
+        PARALLEL_BIGLITTLE,
         PARALLEL_STATIC,
-        PARALLEL_STATIC_BASELINE,
-        PARALLEL_VFC_BASELINE
+        PARALLEL_STATIC_BIGLITTLE,
+        PARALLEL_VFC_BIGLITTLE
     };
     AlgorithmType algorithm = SEQUENTIAL;
     int numThreads = 1;
@@ -72,16 +72,16 @@ int main(int argc, char* argv[]) {
             algorithm = PARALLEL_VFC;
         }
         else if (strcmp(argv[i], "-B") == 0) {
-            algorithm = PARALLEL_BASELINE;
+            algorithm = PARALLEL_BIGLITTLE;
         }
         else if (strcmp(argv[i], "-PS") == 0) {
             algorithm = PARALLEL_STATIC;
         }
         else if (strcmp(argv[i], "-PSB") == 0) {
-            algorithm = PARALLEL_STATIC_BASELINE;
+            algorithm = PARALLEL_STATIC_BIGLITTLE;
         }
         else if (strcmp(argv[i], "-VB") == 0) {
-            algorithm = PARALLEL_VFC_BASELINE;
+            algorithm = PARALLEL_VFC_BIGLITTLE;
         }
         else if (strcmp(argv[i], "-n") == 0 && i + 1 < argc) {
             numThreads = std::atoi(argv[++i]);
@@ -199,20 +199,26 @@ int main(int argc, char* argv[]) {
                       << numThreads << " threads\n";
             louvainParallelVFC(g, H, numThreads);
             break;
-        case PARALLEL_BASELINE:
-            std::cout << "Running parallel Louvain baseline algorithm with " << numThreads << " threads\n";
-            louvainParallelBL(g, H, numThreads);
+        case PARALLEL_BIGLITTLE:
+            if (useSystemCores) {
+                std::cout << "Running parallel Louvain Big.LITTLE algorithm with " << numThreads << " threads\n";
+                louvainParallelBL(g, H, numThreads);
+            } else {
+                std::cout << "Running parallel Louvain Big.LITTLE algorithm with " 
+                          << pCoreCount << " P-cores and " << eCoreCount << " E-cores\n";
+                louvainParallelBL(g, H, pCoreCount + eCoreCount, pCoreCount, eCoreCount);
+            }
             break;
         case PARALLEL_STATIC:
             std::cout << "Running parallel Louvain with static scheduling using " << numThreads << " threads\n";
             louvainParallelStatic(g, H, numThreads);
             break;
-        case PARALLEL_STATIC_BASELINE:
-            std::cout << "Running parallel Louvain static baseline algorithm with " << numThreads << " threads\n";
+        case PARALLEL_STATIC_BIGLITTLE:
+            std::cout << "Running parallel Louvain static Big.LITTLE algorithm with " << numThreads << " threads\n";
             louvainParallelStaticBL(g, H, numThreads);
             break;
-        case PARALLEL_VFC_BASELINE:
-            std::cout << "Running parallel Louvain VFC baseline algorithm with " << numThreads << " threads\n";
+        case PARALLEL_VFC_BIGLITTLE:
+            std::cout << "Running parallel Louvain VFC Big.LITTLE algorithm with " << numThreads << " threads\n";
             louvainParallelVFCBL(g, H, numThreads);
             break;
     }
