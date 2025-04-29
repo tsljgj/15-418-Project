@@ -259,6 +259,12 @@ int main(int argc, char* argv[]) {
                 std::cout << "Running parallel Louvain static Big.LITTLE algorithm with "
                           << pCoreCount << " P-cores and " << eCoreCount << " E-cores"
                           << " (P:E speed ratio = " << speedRatio << ")\n";
+                if(pCoreCount/eCoreCount>=2){
+                    speedRatio=2;
+                }
+                else{
+                    speedRatio=1.5;
+                }
                 louvainParallelStaticBL(g, H, pCoreCount + eCoreCount,
                                         pCoreCount, eCoreCount, speedRatio);
             }
