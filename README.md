@@ -45,7 +45,7 @@ louvain-community-detection/
 │   ├── test_louvain.cpp   # Main executable source
 │   ├── test_naive_bl.bat  # Big.LITTLE testing script
 │   └── test_static.py     # Advanced heterogeneous testing
-├── inputs/                # Input graph datasets
+└── inputs/                # Input graph datasets
 ```
 
 ## Building the Project
