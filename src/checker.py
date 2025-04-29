@@ -139,17 +139,10 @@ def extract_metrics(output):
     
     return runtime, modularity
 
-def print_header(header_text):
-    """Print a formatted header."""
-    width = 80
-    print("\n" + "=" * width)
-    print(f"{Fore.CYAN}{header_text.center(width)}{Style.RESET_ALL}")
-    print("=" * width)
-
 def print_section(section_text):
     """Print a formatted section header."""
     width = 80
-    print(f"\n{Fore.YELLOW}{section_text}{Style.RESET_ALL}")
+    print(f"{Fore.YELLOW}{section_text}{Style.RESET_ALL}")
     print("-" * width)
 
 def print_table(headers, data):
@@ -175,8 +168,6 @@ def print_table(headers, data):
 
 def run_benchmarks(args):
     """Run all benchmarks according to provided arguments."""
-    print_header("LOUVAIN ALGORITHM BENCHMARK")
-    
     # Check if executable exists
     if not os.path.isfile(args.executable):
         print(f"{Fore.RED}Error: Executable not found at {args.executable}{Style.RESET_ALL}")
@@ -288,23 +279,17 @@ def run_benchmarks(args):
                 "modularity": avg_modularity
             }
     
-    # Print sequential results
+    # Print sequential results (silently)
     headers = ["Configuration", "Threads", "Core Type", "P-cores", "E-cores", "Runtime (s)", "Modularity"]
-    print_table(headers, sequential_results)
     
-    # Run parallel algorithms
+    # Silently run parallel algorithms without printing their progress
     for algorithm in algorithms:
         if algorithm == "sequential":
             continue  # Already done
             
-        # Run algorithm but don't print detailed results
-        print_section(f"RUNNING {algo_display_names.get(algorithm, algorithm.upper())} ALGORITHM")
-        
         # Test with system-decided cores
         if system_thread_counts:
-            for threads in system_thread_counts:
-                print(f"\nBenchmarking with {Fore.GREEN}{threads}{Style.RESET_ALL} thread(s) (system-decided)...")
-                
+            for threads in system_thread_counts:                
                 runs_runtimes = []
                 runs_modularities = []
                 
@@ -337,8 +322,6 @@ def run_benchmarks(args):
         # Test with specific P:E ratios
         if p_e_ratios:
             for p_cores, e_cores in p_e_ratios:
-                print(f"\nBenchmarking with {Fore.GREEN}{p_cores} P-cores and {e_cores} E-cores{Style.RESET_ALL}...")
-                
                 runs_runtimes = []
                 runs_modularities = []
                 
@@ -371,7 +354,7 @@ def run_benchmarks(args):
     
     # Final comparison across all algorithms
     if all_results:
-        print_header("PERFORMANCE COMPARISON")
+        print_section("PERFORMANCE COMPARISON")
         
         # Prepare comparison table
         comparison_data = []

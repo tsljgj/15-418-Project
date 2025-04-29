@@ -171,7 +171,7 @@ int main(int argc, char* argv[]) {
     
     // Read the graph
     Graph g = readGraph(input_filename);
-    std::cout << "Graph loaded: " << g.n << " nodes, total weighted m = " << g.m << "\n";
+    // std::cout << "Graph loaded: " << g.n << " nodes, total weighted m = " << g.m << "\n";
     
     // Run the appropriate algorithm and time its execution
     auto start_time = std::chrono::high_resolution_clock::now();
@@ -218,12 +218,12 @@ int main(int argc, char* argv[]) {
     
         case PARALLEL_BIGLITTLE:
             if (useSystemCores) {
-                std::cout << "Running parallel Louvain Big.LITTLE algorithm with "
-                          << numThreads << " threads (system decided)\n";
+                // std::cout << "Running parallel Louvain Big.LITTLE algorithm with "
+                //           << numThreads << " threads (system decided)\n";
                 louvainParallelBL(g, H, numThreads);
             } else {
-                std::cout << "Running parallel Louvain Big.LITTLE algorithm with "
-                          << pCoreCount << " P-cores and " << eCoreCount << " E-cores\n";
+                // std::cout << "Running parallel Louvain Big.LITTLE algorithm with "
+                //           << pCoreCount << " P-cores and " << eCoreCount << " E-cores\n";
                 louvainParallelBL(g, H, pCoreCount + eCoreCount,
                                   pCoreCount, eCoreCount);
             }
@@ -273,11 +273,11 @@ int main(int argc, char* argv[]) {
     auto end_time = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed_seconds = end_time - start_time;
     
-    std::cout << "\n--- Hierarchical Decomposition Summary ---\n";
+    // std::cout << "\n--- Hierarchical Decomposition Summary ---\n";
     for (size_t level = 0; level < H.partitions.size(); ++level) {
         const std::vector<int> &part = H.partitions[level];
         std::unordered_set<int> comms(part.begin(), part.end());
-        std::cout << "Level " << level << " -> " << comms.size() << " communities\n";
+        // std::cout << "Level " << level << " -> " << comms.size() << " communities\n";
     }
     
     std::cout << "\nTotal runtime: " << elapsed_seconds.count() << " seconds\n";

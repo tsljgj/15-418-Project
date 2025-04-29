@@ -76,9 +76,9 @@ void louvainParallelBL(const Graph &g0, Hierarchy &H,
         coreAssignments = assignParallelCores(pCoreCount, eCoreCount);
         if (coreAssignments.empty()) return;
         numThreads = (int)coreAssignments.size();
-        std::cout << "Core assignments: ";
-        for (int id : coreAssignments) std::cout << id << " ";
-        std::cout << std::endl;
+        // std::cout << "Core assignments: ";
+        // for (int id : coreAssignments) std::cout << id << " ";
+        // std::cout << std::endl;
     } else {
         std::cout << "Using " << numThreads << " threads (auto affinity)\n";
     }
@@ -92,9 +92,9 @@ void louvainParallelBL(const Graph &g0, Hierarchy &H,
             int tid = omp_get_thread_num();
             if (tid < (int)coreAssignments.size()) {
                 setThreadAffinityToCpu(coreAssignments[tid]);
-                #pragma omp critical
-                std::cout << "Thread " << tid
-                          << " pinned to CPU " << coreAssignments[tid] << "\n";
+                // #pragma omp critical
+                // std::cout << "Thread " << tid
+                //           << " pinned to CPU " << coreAssignments[tid] << "\n";
             }
         }
     }

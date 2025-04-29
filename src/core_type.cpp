@@ -13,7 +13,7 @@ void setThreadAffinityToCpu(int cpuId) {
     DWORD_PTR affinityMask = (static_cast<DWORD_PTR>(1) << cpuId);
     DWORD threadId = GetCurrentThreadId();
     
-    std::cout << "Setting thread " << threadId << " to CPU " << cpuId << std::endl;
+    // std::cout << "Setting thread " << threadId << " to CPU " << cpuId << std::endl;
     
     BOOL result = SetThreadAffinityMask(currentThread, affinityMask);
     
@@ -21,8 +21,8 @@ void setThreadAffinityToCpu(int cpuId) {
         std::cerr << "Error setting thread affinity to CPU " << cpuId 
                   << ": " << GetLastError() << " for Thread ID: " << threadId << std::endl;
     } else {
-        std::cout << "Thread " << threadId << " successfully assigned to CPU " << cpuId << std::endl;
-                //   << " (SetThreadAffinityMask took " << elapsed_seconds.count() << " seconds)" << std::endl;
+        // std::cout << "Thread " << threadId << " successfully assigned to CPU " << cpuId << std::endl;
+        //         //   << " (SetThreadAffinityMask took " << elapsed_seconds.count() << " seconds)" << std::endl;
     }
 }
 
@@ -62,7 +62,7 @@ std::vector<int> getCpuIdsForCoreType(CoreType coreType) {
 void setThreadAffinityCoreType(CoreType coreType) {
     // If ANY_CORE, don't set any specific affinity
     if (coreType == ANY_CORE) {
-        std::cout << "No specific core affinity set - using any available core (system decides)\n";
+        // std::cout << "No specific core affinity set - using any available core (system decides)\n";
         return;
     }
     
@@ -81,24 +81,24 @@ void setThreadAffinityCoreType(CoreType coreType) {
     }
     
     DWORD threadId = GetCurrentThreadId();
-    std::cout << "Setting thread " << threadId << " to ";
-    if (coreType == P_CORE) {
-        std::cout << "P-cores (CPUs 0-15)\n";
-    } else if (coreType == E_CORE) {
-        std::cout << "E-cores (CPUs 16-31)\n";
-    }
+    // std::cout << "Setting thread " << threadId << " to ";
+    // if (coreType == P_CORE) {
+    //     std::cout << "P-cores (CPUs 0-15)\n";
+    // } else if (coreType == E_CORE) {
+    //     std::cout << "E-cores (CPUs 16-31)\n";
+    // }
     
     BOOL result = SetThreadAffinityMask(currentThread, affinityMask);
     if (result == 0) {
         std::cerr << "Error setting thread affinity: " << GetLastError() 
                  << " for Thread ID: " << threadId << std::endl;
     } else {
-        std::cout << "Affinity set successfully for Thread ID: " << threadId << std::endl;
+        // std::cout << "Affinity set successfully for Thread ID: " << threadId << std::endl;
         
         // Get and print the actual affinity mask that was set
         DWORD_PTR processAffinityMask, systemAffinityMask;
         if (GetProcessAffinityMask(GetCurrentProcess(), &processAffinityMask, &systemAffinityMask)) {
-            std::cout << "Process affinity mask: 0x" << std::hex << processAffinityMask << std::dec << std::endl;
+            // std::cout << "Process affinity mask: 0x" << std::hex << processAffinityMask << std::dec << std::endl;
         }
     }
 }
