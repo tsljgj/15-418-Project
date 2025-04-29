@@ -1,104 +1,128 @@
-# Louvain Community Detection
+# Louvain Community Detection on Heterogeneous Systems
 
-This repository contains sequential and parallel implementations of the Louvain community detection algorithm for large graphs.
+This repository implements sequential and parallel versions of the Louvain community detection algorithm for large graphs, optimized for heterogeneous processors (i9-14900K with 8 P-cores and 16 E-cores).
 
-## Overview
+## System Requirements
 
-The Louvain algorithm is a hierarchical community detection method that optimizes modularity. This implementation includes:
+- **Operating System**: Windows
+- **Compiler**: MinGW (GNU Compiler Collection for Windows)
+- **Build System**: CMake 3.10 or higher
+- **Processor**: Intel hybrid architecture (tested on i9-14900K)
+- **Python Dependencies** (for benchmarking scripts):
+  - Python 3.x
+  - colorama package (`pip install colorama`)
+  - pandas (optional)
 
-- Sequential version (with P-core and E-core options)
-- Naive parallel version using graph partitioning
-- Optimized parallel version with Vertex Following and Coloring (VFC)
+## File Structure
+
+```
+louvain-community-detection/
+├── README.md              # Project overview and usage instructions
+├── build.bat              # Build script for Windows with MinGW
+├── build/                 # Created after compilation
+│   └── test_louvain.exe   # Main executable
+├── src/                   # Source code
+│   ├── CMakeLists.txt     # CMake configuration
+│   ├── checker.py         # Benchmarking script
+│   ├── core_type.cpp      # Heterogeneous core management
+│   ├── core_type.h
+│   ├── graph.cpp          # Graph data structure
+│   ├── graph.h
+│   ├── hierarchy.h        # Community hierarchy structure
+│   ├── louvain_seq.cpp    # Sequential algorithm
+│   ├── louvain_seq.h
+│   ├── louvain_parallel.cpp          # Naive parallel implementation
+│   ├── louvain_parallel.h
+│   ├── louvain_parallel_bl.cpp       # Big.LITTLE-aware implementation
+│   ├── louvain_parallel_bl.h
+│   ├── louvain_parallel_static.cpp   # Static scheduling implementation
+│   ├── louvain_parallel_static.h
+│   ├── louvain_parallel_static_bl.cpp # Static Big.LITTLE implementation
+│   ├── louvain_parallel_static_bl.h
+│   ├── louvain_parallel_vfc.cpp      # VFC implementation
+│   ├── louvain_parallel_vfc.h
+│   ├── test_all.bat       # Batch testing script
+│   ├── test_louvain.cpp   # Main executable source
+│   ├── test_naive_bl.bat  # Big.LITTLE testing script
+│   └── test_static.py     # Advanced heterogeneous testing
+├── inputs/                # Input graph datasets
+```
 
 ## Building the Project
 
-### Windows (with MinGW)
-
-Run the build script to compile the project:
+This project uses MinGW for compilation on Windows:
 
 ```bash
 build.bat
 ```
 
-This will create the executable at `build/test_louvain.exe`.
+This creates the executable at `build/test_louvain.exe`.
+
+## Available Algorithms
+
+- **Sequential**: Baseline implementation with options for P-cores or E-cores
+- **Naive Parallel**: Simple parallel implementation using graph partitioning
+- **VFC Parallel**: Optimized parallel algorithm with Vertex Following and Coloring
+- **Big.LITTLE Parallel**: Heterogeneous-aware implementation for mixed core types
+- **Static Scheduling**: Parallel version with workload-balancing
+- **Static Big.LITTLE**: Combined static scheduling with heterogeneous awareness
 
 ## Running the Algorithm
 
-You can run the algorithm in sequential or parallel mode:
+### Quick Start (Default Run)
 
 ```bash
 # Sequential version (system decides which cores to use)
-./build/test_louvain <graph_file> -S
-
-# Sequential version on P-cores (performance cores)
-./build/test_louvain <graph_file> -S -p
-
-# Sequential version on E-cores (efficiency cores)
-./build/test_louvain <graph_file> -S -e
-
-# Naive parallel version with 4 threads
-./build/test_louvain <graph_file> -P -n 4
-
-# VFC parallel version with 8 threads
-./build/test_louvain <graph_file> -V -n 8
+build\test_louvain.exe inputs\community_1e4_ultrasparse.txt
 ```
 
-### Command-line options:
-- `-S`: Run sequential algorithm (default)
-- `-P`: Run naive parallel algorithm with graph partitioning
-- `-V`: Run optimized parallel algorithm with Vertex Following and Coloring
-- `-n <num_threads>`: Number of threads to use (default: 1)
-- `-p`: Run on P-cores (performance cores)
-- `-e`: Run on E-cores (efficiency cores)
+### Algorithm Options
+
+```bash
+# Sequential version on P-cores
+build\test_louvain.exe inputs\community_1e4_ultrasparse.txt -S -p
+
+# Sequential version on E-cores
+build\test_louvain.exe inputs\community_1e4_ultrasparse.txt -S -e
+
+# Naive parallel version with 4 threads (system decides cores)
+build\test_louvain.exe inputs\community_1e4_ultrasparse.txt -P -a 4
+
+# VFC parallel version with 8 threads (system decides cores)
+build\test_louvain.exe inputs\community_1e4_ultrasparse.txt -V -a 8
+
+# Parallel using specific core counts (2 P-cores, 4 E-cores)
+build\test_louvain.exe inputs\community_1e4_ultrasparse.txt -P -pc 2 -ec 4
+
+# Big.LITTLE aware version with specific core counts
+build\test_louvain.exe inputs\community_1e4_ultrasparse.txt -B -pc 2 -ec 6
+```
 
 ## Benchmarking with checker.py
 
-The repository includes a benchmarking script `checker.py` that automatically runs the sequential algorithm on both P-cores and E-cores as baselines, and then tests your specified algorithms with different thread counts.
-
-### Basic Usage
+The repository includes a benchmarking script that automatically runs tests with different configurations:
 
 ```bash
-python src/checker.py inputs/community_graph_5e5.txt --algorithm naive
+# Requirements: Python 3.x with colorama package
+pip install colorama
+
+# Basic usage (tests naive algorithm with default settings)
+python src/checker.py inputs\community_1e4_ultrasparse.txt --algorithm naive
+
+# Test multiple algorithms with various thread counts
+python src/checker.py inputs\community_1e4_ultrasparse.txt --algorithm naive,vfc --threads 1,2,4,8,16
 ```
 
-This will:
-1. Run sequential algorithm on both P-cores and E-cores as baselines
-2. Run the naive parallel algorithm with default thread counts
-3. Report performance metrics including speedups relative to both baselines
+### Command-line Options for checker.py
 
-### All Available Options
+- `<input_file>`: Graph file path
+- `--algorithm`: Comma-separated list (options: naive,vfc,naive_bl,static,static_bl)
+- `--threads`: Thread counts to test
+- `--p-e-ratio`: P:E core ratios to test (e.g., 4:12,8:8,2:16)
+- `--runs`: Number of runs per configuration (default: 1)
 
-```bash
-python src/checker.py <input_file> [--algorithm ALGORITHM] [--threads THREADS] [--runs RUNS] [--executable EXECUTABLE_PATH]
-```
+## Input Graph Format
 
-### Parameters
-
-- `<input_file>`: Required. Path to the graph file. Default test file is `inputs/community_graph_5e5.txt`
-- `--algorithm`: Comma-separated list of algorithms to test. Options: `naive,vfc`. Default: `naive,vfc`
-- `--threads`: Comma-separated list of thread counts to test. Default: `1,2,4,8`
-- `--runs`: Number of runs for each configuration for more stable results. Default: `1`
-- `--executable`: Path to the test_louvain executable. Default: auto-detected in build directory
-
-### Examples
-
-```bash
-# Run the naive parallel algorithm with default settings
-python src/checker.py inputs/community_graph_5e5.txt --algorithm naive
-
-# Test VFC algorithm with different thread counts
-python src/checker.py inputs/community_graph_5e5.txt --algorithm vfc --threads 2,4,8,16
-
-# Test both algorithms with custom thread counts and multiple runs
-python src/checker.py inputs/community_graph_5e5.txt --algorithm naive,vfc --threads 1,2,4,8,16 --runs 3
-
-# Specify a custom executable location
-python src/checker.py inputs/community_graph_5e5.txt --algorithm naive --executable ./custom/path/test_louvain.exe
-```
-
-## File Formats
-
-The input graph file should be in the following format:
 ```
 <num_nodes> <num_edges>
 <node1> <node2> [weight]
@@ -106,7 +130,4 @@ The input graph file should be in the following format:
 ...
 ```
 
-- First line: number of nodes and edges
-- Each subsequent line: a pair of nodes representing an edge, with an optional weight
-- If weight is omitted, it defaults to 1.0
-- The graph is treated as undirected
+Weight defaults to 1.0 if omitted, and the graph is undirected.
