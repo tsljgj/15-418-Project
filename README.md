@@ -1,62 +1,68 @@
 # 15-418 Project: Parallel Louvain Community Detection
 
-Welcome to our 15-418 Project repository! This project implements parallel versions of the Louvain community detection algorithm for graph analysis.
+This project implements parallel versions of the Louvain community detection algorithm for graph analysis. Louvain is a widely used algorithm for discovering communities in large networks by optimizing modularity. The project was completed for **CMU 15-418: Parallel Computer Architecture and Programming, Spring 2025**.
 
-## Project Proposal
+**Note**: Please check out the `windows` branch of this repository if you want to run on a heterogeneous system (specifically Windows with an i9-14900K with 8 P cores and 16 E cores).
 
-For a detailed overview and further information, please review our [Project Proposal](https://docs.google.com/document/d/1WRLmLnNcaVsU4yoNn0Z73KKaIhtWlAypexBPJcd5nok/edit?usp=sharing).
+## Project Documentation
 
-## Milestone Report
+- [Final Report](https://docs.google.com/document/d/19QWaXZpLhqSkpnOf9Jyusp4uRasFcoMyxVi4orFFFdY/edit?usp=sharing)
+- [Project Slides](https://docs.google.com/presentation/d/1Ww41PCkOaHIHtB0C7g8xba0_nG6tB--hyk_5nXH7OeU/edit?usp=sharing)
 
-For a detailed overview and further information, please review our [Milestone Report](https://docs.google.com/document/d/1c3C9YgUiPjCyHc-xrMc9cLpcsJeDmjJKt6cI9FQebZM/edit?usp=sharing).
+## System Requirements
+
+- Linux operating system (homogeneous system)
+- C++ compiler with C++11 support
+- CMake 3.10 or higher
+- OpenMP support
+- Python 3 with colorama (for running benchmarks)
+
+## Building the Project
+
+Build the project using the provided script:
+
+```bash
+chmod +x build.sh
+./build.sh
+```
+
+The executable will be created in the `build` directory.
 
 ## Algorithm Implementations
 
 This repository contains three implementations of the Louvain community detection algorithm:
 
-1. **Sequential**: The baseline sequential implementation
-2. **Naive Parallel**: A parallelized version using simple graph partitioning
-3. **VFC Parallel**: An optimized parallel version using Vertex Following and Coloring techniques
+1. **Sequential (-S)**: The baseline sequential implementation
+2. **Naive Parallel (-P)**: A parallelized version using simple graph partitioning
+3. **VFC Parallel (-V)**: An optimized parallel version using Vertex Following and Coloring techniques
 
-### Key Differences Between Parallel Implementations
+### Key Differences Between Implementations
 
+- **Sequential**: Standard implementation that processes nodes one at a time
 - **Naive Parallel (-P)**: 
   - Partitions the graph into roughly equal parts
   - Each thread processes its assigned partition
   - Uses atomic operations to handle shared data structures
-  - Simple but can suffer from load imbalance and high synchronization overhead
 
 - **VFC Parallel (-V)**:
   - Uses graph coloring to create conflict-free "isolate sets" of vertices
   - Implements vertex following to preprocess the graph (merging single-degree vertices with neighbors)
-  - Minimizes thread contention by processing independent vertex sets in parallel
-  - More sophisticated synchronization strategy for better scalability
-
-## Building the Project
-
-### Prerequisites
-
-- CMake 3.10 or higher
-- C++ compiler with C++11 support
-- OpenMP support
-- Python 3 with colorama (for running benchmarks)
-
-### Building
-
-1. Build the project using the provided script:
-   ```bash
-   chmod +x build.sh
-   ./build.sh
-   ```
-
-2. The executable will be created in the `build` directory.
+  - Minimizes thread contention for better scalability
 
 ## Running the Algorithm
 
-You can run the algorithm in sequential or parallel mode:
+### Default Run (Sequential Version)
+
+To run the algorithm with default settings (sequential mode):
 
 ```bash
-# Sequential version
+./build/test_louvain <graph_file>
+```
+
+### With Command-line Options
+
+```bash
+# Sequential version (explicitly specified)
 ./build/test_louvain <graph_file> -S
 
 # Naive parallel version with 4 threads
@@ -66,47 +72,29 @@ You can run the algorithm in sequential or parallel mode:
 ./build/test_louvain <graph_file> -V -n 8
 ```
 
-### Command-line options:
-- `-S`: Run sequential algorithm (default)
+### Command-line Options:
+- `-S`: Run sequential algorithm (default if no option specified)
 - `-P`: Run naive parallel algorithm with graph partitioning
 - `-V`: Run optimized parallel algorithm with Vertex Following and Coloring
 - `-n <num_threads>`: Number of threads to use (default: 1)
 
-## Benchmarking
+## Running Benchmarks
 
-The repository includes a benchmarking script to compare the performance of different algorithm implementations:
+The repository includes a benchmarking script to compare the performance of different implementations:
 
 ```bash
 # Basic benchmark with default settings
 python src/checker.py inputs/community_graph.txt
 
-# Custom benchmark specifying algorithms, thread counts, and runs
+# Custom benchmark with specific algorithms, thread counts, and runs
 python src/checker.py inputs/community_graph.txt --algorithm sequential,naive,vfc --threads 1,2,4,8 --runs 3
 ```
 
-### Benchmark options:
+### Benchmark Options:
 - `--algorithm`: Comma-separated list of algorithms to test (sequential,naive,vfc)
 - `--threads`: Comma-separated list of thread counts to test
 - `--runs`: Number of runs for each configuration
 - `--executable`: Path to the test_louvain executable
-
-## Graph Generator
-
-The repository includes tools for generating test graphs in the `graph_generator` directory:
-
-```bash
-# Generate a random graph
-./graph_generator/graph_generator random_graph.txt random 1000 5000
-
-# Generate a community graph (good for testing community detection)
-./graph_generator/graph_generator community_graph.txt community 1000 10 0.3 0.02
-
-# Generate a preferential attachment graph
-./graph_generator/graph_generator preferential_graph.txt preferential 1000 10 3
-
-# Generate a small-world graph
-./graph_generator/graph_generator smallworld_graph.txt smallworld 1000 6 0.1
-```
 
 ## Input Graph Format
 
@@ -124,10 +112,11 @@ project_root/
 │   ├── louvain_seq.h/cpp       # Sequential implementation
 │   ├── louvain_parallel.h/cpp  # Naive parallel implementation
 │   ├── louvain_parallel_vfc.h/cpp # VFC parallel implementation
+│   ├── graph.h/cpp             # Graph data structures
+│   ├── hierarchy.h             # Hierarchy data structure
 │   ├── test_louvain.cpp        # Main executable
 │   └── checker.py              # Benchmarking script
 ├── build/                      # Build output (created by build script)
-├── graph_generator/            # Graph generator tools
 ├── inputs/                     # Input graph files
 └── build.sh                    # Build script
 ```

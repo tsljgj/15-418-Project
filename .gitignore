@@ -2,7 +2,7 @@
 build/
 
 # Ignore inputs directory
-inputs/
+# inputs/
 
 graph_generator/
 
