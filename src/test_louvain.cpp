@@ -197,7 +197,7 @@ int main(int argc, char* argv[]) {
         case PARALLEL_VFC:
             std::cout << "Running parallel Louvain algorithm with Vertex Following and Coloring using " 
                       << numThreads << " threads\n";
-            louvainParallelVFC(g, H, numThreads);
+            louvainParallelVFC(g, H, numThreads, pCoreCount, eCoreCount);
             break;
         case PARALLEL_BIGLITTLE:
             if (useSystemCores) {
@@ -211,15 +211,15 @@ int main(int argc, char* argv[]) {
             break;
         case PARALLEL_STATIC:
             std::cout << "Running parallel Louvain with static scheduling using " << numThreads << " threads\n";
-            louvainParallelStatic(g, H, numThreads);
+            louvainParallelStatic(g, H, numThreads, pCoreCount, eCoreCount);
             break;
         case PARALLEL_STATIC_BIGLITTLE:
             std::cout << "Running parallel Louvain static Big.LITTLE algorithm with " << numThreads << " threads\n";
-            louvainParallelStaticBL(g, H, numThreads);
+            louvainParallelStaticBL(g, H, numThreads, pCoreCount, eCoreCount);
             break;
         case PARALLEL_VFC_BIGLITTLE:
             std::cout << "Running parallel Louvain VFC Big.LITTLE algorithm with " << numThreads << " threads\n";
-            louvainParallelVFCBL(g, H, numThreads);
+            louvainParallelVFCBL(g, H, numThreads, pCoreCount, eCoreCount);
             break;
     }
     

@@ -15,11 +15,7 @@ void setThreadAffinityToCpu(int cpuId) {
     
     std::cout << "Setting thread " << threadId << " to CPU " << cpuId << std::endl;
     
-    // Measure time spent on SetThreadAffinityMask
-    // auto start_time = std::chrono::high_resolution_clock::now();
     BOOL result = SetThreadAffinityMask(currentThread, affinityMask);
-    // auto end_time = std::chrono::high_resolution_clock::now();
-    // std::chrono::duration<double> elapsed_seconds = end_time - start_time;
     
     if (result == 0) {
         std::cerr << "Error setting thread affinity to CPU " << cpuId 

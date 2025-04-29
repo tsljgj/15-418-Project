@@ -2,6 +2,10 @@
 #define LOUVAIN_PARALLEL_VFC_H
 
 #include "louvain_seq.h"
+#include "graph.h"
+#include "hierarchy.h"
+#include "core_type.h"
+
 #include <omp.h>
 #include <vector>
 #include <unordered_map>
@@ -16,15 +20,28 @@ std::vector<std::vector<int>> createIsolateSets(const Graph &g);
 Graph applyVertexFollowing(const Graph &g, std::vector<int> &mapping);
 
 // Perform a local move phase using isolate sets for conflict-free parallelism
-bool localMovePhaseWithIsolateSets(Graph &g, std::vector<int> &communities, 
-                                 const std::vector<std::vector<int>> &isolateSets,
-                                 double threshold);
+bool localMovePhaseWithIsolateSets(
+    Graph &g,
+    std::vector<int> &communities, 
+    const std::vector<std::vector<int>> &isolateSets,
+    double threshold
+);
 
 // Create an aggregated graph based on communities with parallel processing
-Graph aggregateGraphFast(const Graph &g, const std::vector<int> &communities, 
-                       std::unordered_map<int, int> &commMap);
+Graph aggregateGraphFast(
+    const Graph &g,
+    const std::vector<int> &communities, 
+    std::unordered_map<int, int> &commMap
+);
 
-// Run the Louvain algorithm with Vertex Following and Coloring heuristics
-void louvainParallelVFC(const Graph &g, Hierarchy &hierarchy, int numThreads);
+// Run the Louvain algorithm with Vertex Following and Coloring heuristics,
+// optionally pinning threads to a specified number of P-cores and E-cores
+void louvainParallelVFC(
+    const Graph &g,
+    Hierarchy &hierarchy,
+    int numThreads,
+    int pCoreCount,
+    int eCoreCount
+);
 
 #endif // LOUVAIN_PARALLEL_VFC_H
