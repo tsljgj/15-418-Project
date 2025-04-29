@@ -28,7 +28,6 @@ add_executable(test_louvain
     louvain_parallel_static.cpp
     louvain_parallel_static_bl.cpp
     louvain_parallel_vfc.cpp
-    louvain_parallel_vfc_bl.cpp
     graph.cpp
     core_type.cpp
 )

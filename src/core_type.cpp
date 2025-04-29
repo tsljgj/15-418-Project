@@ -125,8 +125,11 @@ std::vector<int> assignParallelCores(int pCoreCount, int eCoreCount) {
     }
     
     // Assign P-cores (use odd indices to avoid hyperthreading)
-    for (int i = 0; i < pCoreCount; i++) {
-        coreAssignments.push_back(i * 2 + 1); // 1, 3, ...
+    for (int i = 0; i < pCoreCount; ++i) {
+        int coreId = 2*i + 1;
+        if (coreId >= 9)      // anything that would’ve been 9 or above
+            coreId += 2;      // skips over 9 → 11, and shifts 11→13, 13→15, …
+        coreAssignments.push_back(coreId);
     }
     
     // Assign E-cores (16-31)

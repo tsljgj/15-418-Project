@@ -297,19 +297,18 @@ def run_benchmarks(args):
         if algorithm == "sequential":
             continue  # Already done
             
+        # Run algorithm but don't print detailed results
         print_section(f"RUNNING {algo_display_names.get(algorithm, algorithm.upper())} ALGORITHM")
-        algorithm_results = []
         
         # Test with system-decided cores
         if system_thread_counts:
             for threads in system_thread_counts:
-                print(f"\nBenchmarking with {Fore.GREEN}{threads}{Style.RESET_ALL} thread(s) (system-decided):")
+                print(f"\nBenchmarking with {Fore.GREEN}{threads}{Style.RESET_ALL} thread(s) (system-decided)...")
                 
                 runs_runtimes = []
                 runs_modularities = []
                 
                 for i in range(args.runs):
-                    print(f"  Run {i+1}/{args.runs}...", end="", flush=True)
                     stdout, returncode, stderr = run_louvain(args.executable, args.input_file, 
                                                              algorithm, threads)
                     
@@ -317,24 +316,11 @@ def run_benchmarks(args):
                         runtime, modularity = extract_metrics(stdout)
                         runs_runtimes.append(runtime)
                         runs_modularities.append(modularity)
-                        print(f" {Fore.GREEN}Done{Style.RESET_ALL} (Runtime: {runtime:.3f}s, Modularity: {modularity:.6f})")
-                    else:
-                        print(f" {Fore.RED}Failed{Style.RESET_ALL}")
-                
+                    
                 # Calculate statistics
                 if runs_runtimes:
                     avg_runtime = statistics.mean(runs_runtimes)
                     avg_modularity = statistics.mean(runs_modularities)
-                    
-                    algorithm_results.append([
-                        f"{algorithm}_system",
-                        threads,
-                        "SYSTEM",
-                        "-",
-                        "-",
-                        f"{avg_runtime:.3f}",
-                        f"{avg_modularity:.6f}"
-                    ])
                     
                     # Store results
                     key = f"{algorithm}_sys_{threads}"
@@ -351,13 +337,12 @@ def run_benchmarks(args):
         # Test with specific P:E ratios
         if p_e_ratios:
             for p_cores, e_cores in p_e_ratios:
-                print(f"\nBenchmarking with {Fore.GREEN}{p_cores} P-cores and {e_cores} E-cores{Style.RESET_ALL}:")
+                print(f"\nBenchmarking with {Fore.GREEN}{p_cores} P-cores and {e_cores} E-cores{Style.RESET_ALL}...")
                 
                 runs_runtimes = []
                 runs_modularities = []
                 
                 for i in range(args.runs):
-                    print(f"  Run {i+1}/{args.runs}...", end="", flush=True)
                     stdout, returncode, stderr = run_louvain(args.executable, args.input_file, 
                                                             algorithm, None, None, 
                                                             p_cores, e_cores)
@@ -366,24 +351,11 @@ def run_benchmarks(args):
                         runtime, modularity = extract_metrics(stdout)
                         runs_runtimes.append(runtime)
                         runs_modularities.append(modularity)
-                        print(f" {Fore.GREEN}Done{Style.RESET_ALL} (Runtime: {runtime:.3f}s, Modularity: {modularity:.6f})")
-                    else:
-                        print(f" {Fore.RED}Failed{Style.RESET_ALL}")
                 
                 # Calculate statistics
                 if runs_runtimes:
                     avg_runtime = statistics.mean(runs_runtimes)
                     avg_modularity = statistics.mean(runs_modularities)
-                    
-                    algorithm_results.append([
-                        f"{algorithm}_p{p_cores}_e{e_cores}",
-                        p_cores + e_cores,
-                        "P+E",
-                        p_cores,
-                        e_cores,
-                        f"{avg_runtime:.3f}",
-                        f"{avg_modularity:.6f}"
-                    ])
                     
                     # Store results
                     key = f"{algorithm}_p{p_cores}_e{e_cores}"
@@ -396,10 +368,6 @@ def run_benchmarks(args):
                         "runtime": avg_runtime,
                         "modularity": avg_modularity
                     }
-        
-        # Print algorithm results
-        if algorithm_results:
-            print_table(headers, algorithm_results)
     
     # Final comparison across all algorithms
     if all_results:

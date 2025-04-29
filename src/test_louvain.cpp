@@ -4,7 +4,6 @@
 #include "louvain_parallel_bl.h"
 #include "louvain_parallel_static.h"
 #include "louvain_parallel_static_bl.h"
-#include "louvain_parallel_vfc_bl.h"
 
 #include <iostream>
 #include <string>
@@ -22,7 +21,6 @@ void printUsage(const char* programName) {
     std::cerr << "  -B               Run parallel Louvain Big.LITTLE optimized algorithm\n";
     std::cerr << "  -PS              Run parallel Louvain with static scheduling\n";
     std::cerr << "  -PSB             Run parallel Louvain static Big.LITTLE algorithm\n";
-    std::cerr << "  -VB              Run parallel Louvain VFC Big.LITTLE algorithm\n";
     std::cerr << "  For sequential algorithm:\n";
     std::cerr << "    -p             Run on P-cores (performance cores)\n";
     std::cerr << "    -e             Run on E-cores (efficiency cores)\n";
@@ -49,7 +47,6 @@ int main(int argc, char* argv[]) {
         PARALLEL_BIGLITTLE,
         PARALLEL_STATIC,
         PARALLEL_STATIC_BIGLITTLE,
-        PARALLEL_VFC_BIGLITTLE
     };
     AlgorithmType algorithm = SEQUENTIAL;
     int numThreads = 1;
@@ -83,9 +80,6 @@ int main(int argc, char* argv[]) {
         }
         else if (strcmp(argv[i], "-PSB") == 0) {
             algorithm = PARALLEL_STATIC_BIGLITTLE;
-        }
-        else if (strcmp(argv[i], "-VB") == 0) {
-            algorithm = PARALLEL_VFC_BIGLITTLE;
         }
         else if (strcmp(argv[i], "-n") == 0 && i + 1 < argc) {
             numThreads = std::atoi(argv[++i]);
@@ -267,21 +261,6 @@ int main(int argc, char* argv[]) {
                 }
                 louvainParallelStaticBL(g, H, pCoreCount + eCoreCount,
                                         pCoreCount, eCoreCount, speedRatio);
-            }
-            break;
-    
-        case PARALLEL_VFC_BIGLITTLE:
-            if (useSystemCores) {
-                std::cout << "Running parallel Louvain VFC Big.LITTLE algorithm with "
-                          << numThreads << " threads (system decided)\n";
-                // likewise, all as P-cores in system-decided mode
-                louvainParallelVFCBL(g, H, numThreads,
-                                    numThreads, 0);
-            } else {
-                std::cout << "Running parallel Louvain VFC Big.LITTLE algorithm with "
-                          << pCoreCount << " P-cores and " << eCoreCount << " E-cores\n";
-                louvainParallelVFCBL(g, H, pCoreCount + eCoreCount,
-                                     pCoreCount, eCoreCount);
             }
             break;
     
