@@ -32,6 +32,7 @@ void printUsage(const char* programName) {
     std::cerr << "    -ec num        Number of E-cores to use\n";
     std::cerr << "    -a num         Use 'num' threads on any available cores (system decides)\n";
     std::cerr << "    -n num         DEPRECATED: Same as -a num\n";
+    std::cerr << "    -sr ratio      Speed ratio between P and E cores (default: 2.0, only for -PSB)\n";
 }
 
 int main(int argc, char* argv[]) {
@@ -57,6 +58,9 @@ int main(int argc, char* argv[]) {
     int pCoreCount = 0;
     int eCoreCount = 0;
     bool useSystemCores = true; // Default to system choosing cores
+    
+    // Variable for speed ratio
+    double speedRatio = 2.0; // Default P:E speed ratio
     
     // Parse command line arguments
     CoreType coreType = ANY_CORE; // Default to any core (system decides)
@@ -90,6 +94,14 @@ int main(int argc, char* argv[]) {
                 return EXIT_FAILURE;
             }
             std::cout << "Warning: -n is deprecated. Use -a for system-decided cores.\n";
+        }
+        // Speed ratio option
+        else if (strcmp(argv[i], "-sr") == 0 && i + 1 < argc) {
+            speedRatio = std::atof(argv[++i]);
+            if (speedRatio <= 0.0) {
+                std::cerr << "Error: Speed ratio must be positive\n";
+                return EXIT_FAILURE;
+            }
         }
         // Sequential mode core options
         else if (strcmp(argv[i], "-p") == 0) {
@@ -183,45 +195,95 @@ int main(int argc, char* argv[]) {
             }
             louvainHierarchical(g, H, coreType);
             break;
+    
         case NAIVE_PARALLEL:
             if (useSystemCores) {
-                std::cout << "Running naive parallel Louvain algorithm with " << numThreads 
-                          << " threads (system decided)\n";
+                std::cout << "Running naive parallel Louvain algorithm with "
+                          << numThreads << " threads (system decided)\n";
                 louvainParallel(g, H, numThreads);
             } else {
-                std::cout << "Running naive parallel Louvain algorithm with " 
+                std::cout << "Running naive parallel Louvain algorithm with "
                           << pCoreCount << " P-cores and " << eCoreCount << " E-cores\n";
-                louvainParallel(g, H, pCoreCount + eCoreCount, pCoreCount, eCoreCount);
+                louvainParallel(g, H, pCoreCount + eCoreCount,
+                                pCoreCount, eCoreCount);
             }
             break;
+    
         case PARALLEL_VFC:
-            std::cout << "Running parallel Louvain algorithm with Vertex Following and Coloring using " 
-                      << numThreads << " threads\n";
-            louvainParallelVFC(g, H, numThreads, pCoreCount, eCoreCount);
+            if (useSystemCores) {
+                std::cout << "Running parallel Louvain with Vertex Following & Coloring using "
+                          << numThreads << " threads (system decided)\n";
+                louvainParallelVFC(g, H, numThreads);
+            } else {
+                std::cout << "Running parallel Louvain with Vertex Following & Coloring using "
+                          << pCoreCount << " P-cores and " << eCoreCount << " E-cores\n";
+                louvainParallelVFC(g, H, pCoreCount + eCoreCount,
+                                   pCoreCount, eCoreCount);
+            }
             break;
+    
         case PARALLEL_BIGLITTLE:
             if (useSystemCores) {
-                std::cout << "Running parallel Louvain Big.LITTLE algorithm with " << numThreads << " threads\n";
+                std::cout << "Running parallel Louvain Big.LITTLE algorithm with "
+                          << numThreads << " threads (system decided)\n";
                 louvainParallelBL(g, H, numThreads);
             } else {
-                std::cout << "Running parallel Louvain Big.LITTLE algorithm with " 
+                std::cout << "Running parallel Louvain Big.LITTLE algorithm with "
                           << pCoreCount << " P-cores and " << eCoreCount << " E-cores\n";
-                louvainParallelBL(g, H, pCoreCount + eCoreCount, pCoreCount, eCoreCount);
+                louvainParallelBL(g, H, pCoreCount + eCoreCount,
+                                  pCoreCount, eCoreCount);
             }
             break;
+    
         case PARALLEL_STATIC:
-            std::cout << "Running parallel Louvain with static scheduling using " << numThreads << " threads\n";
-            louvainParallelStatic(g, H, numThreads, pCoreCount, eCoreCount);
+            if (useSystemCores) {
+                std::cout << "Running parallel Louvain with static scheduling using "
+                          << numThreads << " threads (system decided)\n";
+                louvainParallelStatic(g, H, numThreads);
+            } else {
+                std::cout << "Running parallel Louvain with static scheduling using "
+                          << pCoreCount << " P-cores and " << eCoreCount << " E-cores\n";
+                louvainParallelStatic(g, H, pCoreCount + eCoreCount,
+                                      pCoreCount, eCoreCount);
+            }
             break;
+    
         case PARALLEL_STATIC_BIGLITTLE:
-            std::cout << "Running parallel Louvain static Big.LITTLE algorithm with " << numThreads << " threads\n";
-            louvainParallelStaticBL(g, H, numThreads, pCoreCount, eCoreCount);
+            if (useSystemCores) {
+                std::cout << "Running parallel Louvain static Big.LITTLE algorithm with "
+                          << numThreads << " threads (system decided)\n";
+                // treat all threads as “P-cores” when system decides
+                louvainParallelStaticBL(g, H, numThreads,
+                                        numThreads, 0, speedRatio);
+            } else {
+                std::cout << "Running parallel Louvain static Big.LITTLE algorithm with "
+                          << pCoreCount << " P-cores and " << eCoreCount << " E-cores"
+                          << " (P:E speed ratio = " << speedRatio << ")\n";
+                louvainParallelStaticBL(g, H, pCoreCount + eCoreCount,
+                                        pCoreCount, eCoreCount, speedRatio);
+            }
             break;
+    
         case PARALLEL_VFC_BIGLITTLE:
-            std::cout << "Running parallel Louvain VFC Big.LITTLE algorithm with " << numThreads << " threads\n";
-            louvainParallelVFCBL(g, H, numThreads, pCoreCount, eCoreCount);
+            if (useSystemCores) {
+                std::cout << "Running parallel Louvain VFC Big.LITTLE algorithm with "
+                          << numThreads << " threads (system decided)\n";
+                // likewise, all as P-cores in system-decided mode
+                louvainParallelVFCBL(g, H, numThreads,
+                                    numThreads, 0);
+            } else {
+                std::cout << "Running parallel Louvain VFC Big.LITTLE algorithm with "
+                          << pCoreCount << " P-cores and " << eCoreCount << " E-cores\n";
+                louvainParallelVFCBL(g, H, pCoreCount + eCoreCount,
+                                     pCoreCount, eCoreCount);
+            }
+            break;
+    
+        default:
+            std::cerr << "Unknown algorithm\n";
             break;
     }
+    
     
     auto end_time = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed_seconds = end_time - start_time;

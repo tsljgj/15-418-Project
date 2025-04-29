@@ -5,7 +5,7 @@
 #include "graph.h"
 #include "hierarchy.h"
 
-// The parallel Louvain baseline entry point:
-void louvainParallelStaticBL(const Graph &g, Hierarchy &H, int numThreads, int pCoreCount = 0, int eCoreCount = 0);
+// The parallel Louvain baseline entry point with speed_ratio parameter:
+void louvainParallelStaticBL(const Graph &g, Hierarchy &H, int numThreads, int pCoreCount = 0, int eCoreCount = 0, double speed_ratio = 2.0);
 
 #endif // LOUVAIN_PARALLEL_STATIC_BL_H

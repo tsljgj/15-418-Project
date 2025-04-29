@@ -40,8 +40,8 @@ void louvainParallelVFC(
     const Graph &g,
     Hierarchy &hierarchy,
     int numThreads,
-    int pCoreCount,
-    int eCoreCount
+    int pCoreCount = 0,
+    int eCoreCount = 0
 );
 
 #endif // LOUVAIN_PARALLEL_VFC_H
