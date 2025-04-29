@@ -4,7 +4,7 @@ build/
 # Ignore inputs directory
 # inputs/
 
-# graph_generator/
+graph_generator/
 
 # Keep these directories with .gitkeep
 !build/.gitkeep
