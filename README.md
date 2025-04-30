@@ -6,7 +6,7 @@ This project implements parallel versions of the Louvain community detection alg
 
 ## Project Documentation
 
-- [Final Report](https://docs.google.com/document/d/19QWaXZpLhqSkpnOf9Jyusp4uRasFcoMyxVi4orFFFdY/edit?usp=sharing)
+- [Final Report](https://drive.google.com/file/d/1VzAY6lRszolpZRC6qHhj5d_nXmYvDBSe/view?usp=sharing)
 - [Project Slides](https://drive.google.com/file/d/1h51lXF6JB_K5gC3VmE7N-P_WmjGbdS3B/view?usp=sharing)
 
 ## System Requirements
